@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedLabIQ - Clinical Lab Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script crossorigin src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#080c16;--card:#0f1726;--border:#182035;--border2:#253040;--t1:#f0f4f8;--t2:#e2e8f0;--t3:#c8d1de;--t4:#b0bac8;--t5:#7a8699;--t6:#5a6577;--t7:#4a5568;--t8:#3f4a5c;--red:#e05252;--amber:#d4973b;--green:#3bba6a;--blue:#4a90d9;--purple:#9370e0;--cyan:#2eb8c9;--pink:#d45fa0;--orange:#e07b3b;--font:'DM Sans','Outfit',-apple-system,sans-serif;--mono:'DM Mono','JetBrains Mono',monospace;--head:'Outfit','DM Sans',sans-serif}
+body{background:var(--bg);color:var(--t3);font-family:var(--font);min-height:100vh}
+input,select,textarea,button{font-family:var(--font)}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@media(max-width:768px){
+  .hdr-wrap{flex-direction:column!important;align-items:flex-start!important;gap:12px!important}
+  .hdr-right{width:100%;flex-wrap:wrap!important;gap:8px!important}
+  .stat-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .stat-grid .sn{font-size:26px!important}
+  .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;scrollbar-width:none}
+  .tab-nav::-webkit-scrollbar{display:none}
+  .tab-nav>button{flex:0 0 auto!important;font-size:11px!important;padding:10px 10px!important}
+  .cat-filter{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;scrollbar-width:none}
+  .cat-filter::-webkit-scrollbar{display:none}
+  .cat-filter>button{flex:0 0 auto!important}
+  .qs-grid{grid-template-columns:1fr!important}
+  .page-pad{padding:16px!important}
+  #root{overflow-x:hidden}
+  button{min-height:38px}
+  .qs-grid button{min-height:42px!important;font-size:13px!important}
+  svg{max-width:100%}
+  textarea{font-size:14px!important}
+  input[type="number"],input[type="text"]{font-size:14px!important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo,useRef}=React;
+
+// ── SIMPLE SVG CHART (no external deps) ──
+function SVGChart({marker,values,draws,def}){
+  const pts=draws.map((dr,i)=>({date:dr.date,value:values[i]})).filter(x=>x.value!=null);
+  if(!pts.length)return <div style={{color:"var(--t6)",fontSize:13,padding:16}}>No data</div>;
+  const vals=pts.map(x=>x.value);
+  const mn=Math.min(...vals,def.lo)*0.88;const mx=Math.max(...vals,def.hi)*1.12;
+  const range=mx-mn||1;
+  const W=600,H=200,PL=45,PR=15,PT=15,PB=30;
+  const cw=W-PL-PR,ch=H-PT-PB;
+  const clr=CC[def.c]?.color||"#9370e0";
+  const toX=(i)=>PL+(i/(pts.length-1||1))*cw;
+  const toY=(v)=>PT+ch-(((v-mn)/range)*ch);
+  const line=pts.map((p,i)=>`${i===0?'M':'L'}${toX(i).toFixed(1)},${toY(p.value).toFixed(1)}`).join(' ');
+  const area=line+` L${toX(pts.length-1).toFixed(1)},${(PT+ch).toFixed(1)} L${toX(0).toFixed(1)},${(PT+ch).toFixed(1)} Z`;
+  const hiY=def.hi<999?toY(def.hi):null;
+  const loY=def.lo>0?toY(def.lo):null;
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",maxHeight:210}}>
+      <defs><linearGradient id={"gr_"+marker.replace(/[\s%]/g,'')} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={clr} stopOpacity="0.2"/><stop offset="100%" stopColor={clr} stopOpacity="0.02"/></linearGradient></defs>
+      {/* Grid lines */}
+      {[0,0.25,0.5,0.75,1].map(f=><line key={f} x1={PL} y1={PT+ch*f} x2={W-PR} y2={PT+ch*f} stroke="#1a2233" strokeWidth="1"/>)}
+      {/* Ref lines */}
+      {hiY!=null&&hiY>=PT&&hiY<=PT+ch&&<line x1={PL} y1={hiY} x2={W-PR} y2={hiY} stroke="#e0525240" strokeWidth="1" strokeDasharray="6 4"/>}
+      {loY!=null&&loY>=PT&&loY<=PT+ch&&<line x1={PL} y1={loY} x2={W-PR} y2={loY} stroke="#d4973b40" strokeWidth="1" strokeDasharray="6 4"/>}
+      {/* Area fill */}
+      <path d={area} fill={`url(#gr_${marker.replace(/[\s%]/g,'')})`}/>
+      {/* Line */}
+      <path d={line} fill="none" stroke={clr} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+      {/* Dots and labels */}
+      {pts.map((p,i)=><g key={i}>
+        <circle cx={toX(i)} cy={toY(p.value)} r="5" fill="var(--bg)" stroke={clr} strokeWidth="2.5"/>
+        <text x={toX(i)} y={toY(p.value)-10} textAnchor="middle" fill={clr} fontSize="10" fontWeight="600" fontFamily="var(--mono)">{p.value}</text>
+        <text x={toX(i)} y={H-5} textAnchor="middle" fill="var(--t5)" fontSize="9" fontFamily="var(--font)">{p.date}</text>
+      </g>)}
+      {/* Y axis labels */}
+      <text x={PL-5} y={PT+5} textAnchor="end" fill="var(--t6)" fontSize="9" fontFamily="var(--mono)">{mx.toFixed(0)}</text>
+      <text x={PL-5} y={PT+ch} textAnchor="end" fill="var(--t6)" fontSize="9" fontFamily="var(--mono)">{mn.toFixed(0)}</text>
+      {hiY!=null&&hiY>=PT&&hiY<=PT+ch&&<text x={W-PR+3} y={hiY+3} fill="#e05252" fontSize="8" fontFamily="var(--mono)">H:{def.hi}</text>}
+      {loY!=null&&loY>=PT&&loY<=PT+ch&&<text x={W-PR+3} y={loY+3} fill="#d4973b" fontSize="8" fontFamily="var(--mono)">L:{def.lo}</text>}
+    </svg>
+  );
+}
+
+// ── MARKER DEFS ──
+const MD={
+  "Hematocrit":{u:"%",lo:37.5,hi:51.0,c:"CBC"},"Hemoglobin":{u:"g/dL",lo:13.0,hi:17.7,c:"CBC"},"RBC":{u:"x10E6/uL",lo:4.14,hi:5.80,c:"CBC"},"MCV":{u:"fL",lo:79,hi:97,c:"CBC"},"WBC":{u:"x10E3/uL",lo:3.4,hi:10.8,c:"CBC"},"Platelets":{u:"x10E3/uL",lo:150,hi:379,c:"CBC"},"Eosinophils %":{u:"%",lo:0,hi:5,c:"CBC"},
+  "ALT":{u:"IU/L",lo:0,hi:50,c:"MET"},"AST":{u:"IU/L",lo:0,hi:40,c:"MET"},"Glucose":{u:"mg/dL",lo:65,hi:99,c:"MET"},"eGFR":{u:"mL/min",lo:60,hi:999,c:"MET"},"HbA1c":{u:"%",lo:4.0,hi:5.6,c:"MET"},"Fasting Insulin":{u:"uIU/mL",lo:2.6,hi:24.9,c:"MET"},
+  "Total Cholesterol":{u:"mg/dL",lo:100,hi:199,c:"LIP"},"LDL":{u:"mg/dL",lo:0,hi:129,c:"LIP"},"HDL":{u:"mg/dL",lo:40,hi:999,c:"LIP"},"Triglycerides":{u:"mg/dL",lo:0,hi:149,c:"LIP"},"VLDL":{u:"mg/dL",lo:5,hi:40,c:"LIP"},
+  "Total Testosterone":{u:"ng/dL",lo:264,hi:916,c:"HOR"},"Free Testosterone":{u:"pg/mL",lo:8.7,hi:25.1,c:"HOR"},"SHBG":{u:"nmol/L",lo:16.5,hi:55.9,c:"HOR"},"Estradiol":{u:"pg/mL",lo:7.6,hi:42.6,c:"HOR"},"Estrone":{u:"pg/mL",lo:0,hi:68,c:"HOR"},"DHEA-S":{u:"ug/dL",lo:138.5,hi:475.2,c:"HOR"},"IGF-1":{u:"ng/mL",lo:95,hi:290,c:"HOR"},"Prolactin":{u:"ng/mL",lo:3.9,hi:22.7,c:"HOR"},"PSA":{u:"ng/mL",lo:0,hi:4.0,c:"HOR"},"Cortisol AM":{u:"ug/dL",lo:6.2,hi:19.4,c:"HOR"},"Progesterone":{u:"ng/mL",lo:0,hi:0.5,c:"HOR"},
+  "TSH":{u:"uIU/mL",lo:0.45,hi:4.5,c:"THY"},"Free T3":{u:"pg/mL",lo:2.0,hi:4.4,c:"THY"},"Total T4":{u:"ug/dL",lo:4.5,hi:12.0,c:"THY"},"Reverse T3":{u:"ng/dL",lo:9.2,hi:24.1,c:"THY"},
+  "Ferritin":{u:"ng/mL",lo:30,hi:400,c:"IRN"},
+  "Vitamin D":{u:"ng/mL",lo:30,hi:100,c:"VIT"},"B12":{u:"pg/mL",lo:232,hi:1245,c:"VIT"},
+};
+const CC={CBC:{color:"#e05252",label:"Complete Blood Count"},MET:{color:"#d4973b",label:"Metabolic Panel"},LIP:{color:"#d45fa0",label:"Lipid Panel"},HOR:{color:"#9370e0",label:"Hormone Panel"},THY:{color:"#2eb8c9",label:"Thyroid Panel"},IRN:{color:"#e07b3b",label:"Iron / Ferritin"},VIT:{color:"#3bba6a",label:"Vitamins"}};
+const SC={critical:"#e05252",warning:"#d4973b",info:"#4a90d9"};
+
+// ── DEMO DATA ──
+const DEMO={patient:{name:"John Doe",dob:"01/15/1985",id:"EH-JD001"},draws:[{date:"Nov 2024",lab:"Labcorp",fasting:true},{date:"Jan 2025",lab:"Labcorp",fasting:true},{date:"Jun 2025",lab:"Labcorp",fasting:true},{date:"Oct 2025",lab:"Quest",fasting:true},{date:"Dec 2025",lab:"Labcorp",fasting:true},{date:"Mar 2026",lab:"Labcorp",fasting:false}],values:{"Hematocrit":[57.3,54.6,null,48.9,51.1,56.1],"Hemoglobin":[19.0,18.6,null,16.2,16.9,17.8],"RBC":[5.82,5.70,null,4.95,5.07,5.59],"MCV":[99,96,null,102,101,100],"WBC":[5.9,6.9,10.1,7.4,6.1,4.6],"Platelets":[227,256,229,187,322,253],"Eosinophils %":[2,null,null,null,null,9],"ALT":[null,39,18,50,44,65],"AST":[null,39,16,36,null,31],"Glucose":[null,79,86,61,null,75],"eGFR":[null,119,116,121,null,118],"Total Cholesterol":[null,184,null,236,218,null],"LDL":[null,139,null,149,null,167],"HDL":[null,28,null,18,null,34],"Triglycerides":[null,89,null,369,null,91],"VLDL":[null,null,null,69,null,null],"Total Testosterone":[null,1500,null,483,1288,601],"Free Testosterone":[null,44.4,null,20.8,null,11.9],"SHBG":[null,null,null,7.8,35.0,36.6],"Estradiol":[null,74.8,null,28.6,null,30.5],"Estrone":[null,null,null,96,null,21],"DHEA-S":[227.1,null,null,247.0,null,null],"IGF-1":[303,null,null,322,null,null],"Prolactin":[18.2,null,null,22.3,null,null],"PSA":[0.3,null,null,0.4,null,null],"Cortisol AM":[21,null,null,15.4,null,null],"Progesterone":[0.5,null,null,0.2,null,null],"TSH":[1.18,null,null,1.56,null,0.607],"Free T3":[3.7,null,null,3.3,null,3.3],"Total T4":[null,null,null,null,null,6.1],"Reverse T3":[null,null,null,18.6,null,11.5],"Ferritin":[null,907,402,1167,313,311],"Vitamin D":[40.9,null,null,22.1,null,null],"B12":[843,null,null,907,null,null],"HbA1c":[4.8,null,null,5.0,null,null],"Fasting Insulin":[4.5,null,null,6.6,null,null]},
+  questionnaire:[{date:"Oct 2025",answers:{sleep:3,energy:2,libido:2,mood:3,hydration:2,brain_fog:4,joint_pain:2,digestion:3,stress:4,exercise:2}},{date:"Mar 2026",answers:{sleep:4,energy:3,libido:3,mood:4,hydration:3,brain_fog:2,joint_pain:2,digestion:4,stress:3,exercise:3}}],
+  timeline:[{date:"Nov 2024",notes:"Baseline. Hematocrit 57.3% (HIGH). Hemoglobin 19.0 (HIGH). Vitamin D 40.9. IGF-1 303 (above range). Cortisol 21 (elevated)."},{date:"Jan 2025",notes:"Testosterone 1500 (supraphysiologic). Estradiol 74.8 (HIGH). Free T 44.4. ALT/AST 39. Ferritin 907 (HIGH). HDL 28 (LOW)."},{date:"Jun 2025",notes:"Ferritin dropping to 402. ALT improved to 18. Limited panel."},{date:"Oct 2025",notes:"LIPID CRISIS: Trigs 369, HDL 18, VLDL 69. Ferritin peaked 1167. SHBG 7.8 (suppressed). Vitamin D 22.1 (LOW)."},{date:"Dec 2025",notes:"Recovery. Ferritin normalized 313. SHBG 35.0. Testosterone 1288."},{date:"Mar 2026",notes:"Current. Hematocrit 56.1% (CRITICAL). ALT 65 (highest, trending up). LDL 167 (high risk). Trigs corrected 91. HDL 34 (improving). SHBG 36.6. Estradiol 30.5 (normal). TSH 0.607. T 601. Free T 11.9 (low-normal). Non-fasting."}]
+};
+
+// ── CLINIC ROSTER (demo multi-patient data) ──
+const CLINIC_PATIENTS=[
+  {id:"EH-JD001",name:"John Doe",dob:"01/15/1985",gender:"M",lastDraw:"Mar 2026",draws:6,critFlags:3,warnFlags:4,status:"active",provider:"Koskinen APRN",labsDue:false,planStatus:"signed",lastVisit:"Mar 15, 2026"},
+  {id:"EH-SM002",name:"Sarah Mitchell",dob:"06/22/1978",gender:"F",lastDraw:"Mar 2026",draws:4,critFlags:0,warnFlags:2,status:"active",provider:"Koskinen APRN",labsDue:true,planStatus:"draft",lastVisit:"Mar 20, 2026"},
+  {id:"EH-RJ003",name:"Robert James",dob:"11/03/1990",gender:"M",lastDraw:"Feb 2026",draws:3,critFlags:1,warnFlags:1,status:"active",provider:"Murphy NP",labsDue:true,planStatus:"signed",lastVisit:"Feb 10, 2026"},
+  {id:"EH-LW004",name:"Linda Watson",dob:"09/14/1972",gender:"F",lastDraw:"Jan 2026",draws:5,critFlags:0,warnFlags:0,status:"active",provider:"Murphy NP",labsDue:true,planStatus:"signed",lastVisit:"Jan 25, 2026"},
+  {id:"EH-MC005",name:"Michael Chen",dob:"03/30/1988",gender:"M",lastDraw:"Mar 2026",draws:2,critFlags:2,warnFlags:3,status:"active",provider:"Koskinen APRN",labsDue:false,planStatus:"draft",lastVisit:"Mar 28, 2026"},
+  {id:"EH-AP006",name:"Angela Perez",dob:"12/05/1983",gender:"F",lastDraw:"Dec 2025",draws:3,critFlags:0,warnFlags:1,status:"active",provider:"Murphy NP",labsDue:true,planStatus:"none",lastVisit:"Dec 18, 2025"},
+  {id:"EH-TK007",name:"Thomas Kim",dob:"07/19/1975",gender:"M",lastDraw:"Mar 2026",draws:7,critFlags:0,warnFlags:0,status:"active",provider:"Koskinen APRN",labsDue:false,planStatus:"signed",lastVisit:"Apr 1, 2026"},
+  {id:"EH-JB008",name:"Jennifer Brooks",dob:"04/11/1991",gender:"F",lastDraw:"Nov 2025",draws:2,critFlags:1,warnFlags:2,status:"inactive",provider:"Murphy NP",labsDue:true,planStatus:"none",lastVisit:"Nov 5, 2025"},
+  {id:"EH-DW009",name:"David Wilson",dob:"08/27/1969",gender:"M",lastDraw:"Feb 2026",draws:4,critFlags:1,warnFlags:3,status:"active",provider:"Koskinen APRN",labsDue:true,planStatus:"draft",lastVisit:"Feb 22, 2026"},
+  {id:"EH-KR010",name:"Karen Rodriguez",dob:"01/08/1980",gender:"F",lastDraw:"Mar 2026",draws:3,critFlags:0,warnFlags:1,status:"active",provider:"Murphy NP",labsDue:false,planStatus:"signed",lastVisit:"Mar 30, 2026"},
+  {id:"EH-BT011",name:"Brian Taylor",dob:"05/16/1986",gender:"M",lastDraw:"Jan 2026",draws:2,critFlags:0,warnFlags:2,status:"active",provider:"Koskinen APRN",labsDue:true,planStatus:"none",lastVisit:"Jan 14, 2026"},
+  {id:"EH-NL012",name:"Nicole Lee",dob:"10/29/1994",gender:"F",lastDraw:"Mar 2026",draws:4,critFlags:0,warnFlags:0,status:"active",provider:"Murphy NP",labsDue:false,planStatus:"signed",lastVisit:"Apr 5, 2026"},
+];
+
+const CLINIC_PROVIDERS=[
+  {name:"J. Koskinen APRN",role:"Lead Provider",patients:6,active:true},
+  {name:"Emily Murphy NP",role:"Provider",patients:6,active:true},
+];
+
+const AUDIT_LOG=[
+  {time:"Apr 14, 2026 11:32 AM",user:"Koskinen APRN",action:"Treatment plan signed",entity:"John Doe",detail:"12 items, 3 high priority"},
+  {time:"Apr 14, 2026 11:28 AM",user:"Koskinen APRN",action:"Recommendations generated",entity:"John Doe",detail:"3 critical, 4 warnings"},
+  {time:"Apr 14, 2026 11:25 AM",user:"System",action:"PDF extracted",entity:"John Doe",detail:"Mar 2026 draw, 34 markers"},
+  {time:"Apr 13, 2026 3:15 PM",user:"Murphy NP",action:"Treatment plan signed",entity:"Karen Rodriguez",detail:"5 items, 0 high priority"},
+  {time:"Apr 13, 2026 2:50 PM",user:"Murphy NP",action:"Questionnaire reviewed",entity:"Karen Rodriguez",detail:"2 cross-reference findings"},
+  {time:"Apr 13, 2026 10:00 AM",user:"System",action:"Reminder sent",entity:"Robert James",detail:"Lab draw overdue (45 days)"},
+  {time:"Apr 12, 2026 4:20 PM",user:"Koskinen APRN",action:"Rule added",entity:"System",detail:"If Ferritin > 500, recommend IV chelation consult"},
+  {time:"Apr 12, 2026 9:00 AM",user:"System",action:"Reminder sent",entity:"Angela Perez",detail:"Lab draw overdue (112 days)"},
+  {time:"Apr 11, 2026 2:30 PM",user:"Murphy NP",action:"Patient created",entity:"Nicole Lee",detail:"New patient intake"},
+  {time:"Apr 10, 2026 11:15 AM",user:"Koskinen APRN",action:"Treatment plan edited",entity:"Michael Chen",detail:"Added BPC-157 protocol"},
+];
+  questionnaire:[{date:"Oct 2025",answers:{sleep:3,energy:2,libido:2,mood:3,hydration:2,brain_fog:4,joint_pain:2,digestion:3,stress:4,exercise:2}},{date:"Mar 2026",answers:{sleep:4,energy:3,libido:3,mood:4,hydration:3,brain_fog:2,joint_pain:2,digestion:4,stress:3,exercise:3}}],
+  timeline:[{date:"Nov 2024",notes:"Baseline. Hematocrit 57.3% (HIGH). Hemoglobin 19.0 (HIGH). Vitamin D 40.9. IGF-1 303 (above range). Cortisol 21 (elevated)."},{date:"Jan 2025",notes:"Testosterone 1500 (supraphysiologic). Estradiol 74.8 (HIGH). Free T 44.4. ALT/AST 39. Ferritin 907 (HIGH). HDL 28 (LOW)."},{date:"Jun 2025",notes:"Ferritin dropping to 402. ALT improved to 18. Limited panel."},{date:"Oct 2025",notes:"LIPID CRISIS: Trigs 369, HDL 18, VLDL 69. Ferritin peaked 1167. SHBG 7.8 (suppressed). Vitamin D 22.1 (LOW)."},{date:"Dec 2025",notes:"Recovery. Ferritin normalized 313. SHBG 35.0. Testosterone 1288."},{date:"Mar 2026",notes:"Current. Hematocrit 56.1% (CRITICAL). ALT 65 (highest, trending up). LDL 167 (high risk). Trigs corrected 91. HDL 34 (improving). SHBG 36.6. Estradiol 30.5 (normal). TSH 0.607. T 601. Free T 11.9 (low-normal). Non-fasting."}]
+};
+
+// ── RULES ──
+const QS_FIELDS=[{key:"sleep",label:"Sleep Quality",desc:"1=terrible, 5=excellent"},{key:"energy",label:"Energy Level",desc:"1=exhausted, 5=high"},{key:"libido",label:"Libido",desc:"1=absent, 5=strong"},{key:"mood",label:"Mood",desc:"1=flat, 5=driven"},{key:"hydration",label:"Hydration",desc:"1=poor, 5=optimal"},{key:"brain_fog",label:"Brain Fog",desc:"1=clear, 5=severe"},{key:"joint_pain",label:"Joint Pain",desc:"1=none, 5=severe"},{key:"digestion",label:"Digestion",desc:"1=poor, 5=excellent"},{key:"stress",label:"Stress",desc:"1=low, 5=overwhelming"},{key:"exercise",label:"Exercise",desc:"1=none, 5=6+days"}];
+const QS_RULES=[
+  {check:(a,v)=>a.energy<=2&&v["Vitamin D"]&&v["Vitamin D"].filter(x=>x!=null).slice(-1)[0]<30,sev:"warning",rec:"Low energy + Vitamin D insufficient. Supplement 5-10K IU/day."},
+  {check:(a,v)=>a.energy<=2&&v["Free Testosterone"]&&v["Free Testosterone"].filter(x=>x!=null).slice(-1)[0]<15,sev:"warning",rec:"Low energy + Free T low-normal. Optimize protocol."},
+  {check:(a,v)=>a.hydration<=2&&v["Hematocrit"]&&v["Hematocrit"].filter(x=>x!=null).slice(-1)[0]>51,sev:"warning",rec:"Poor hydration + elevated hematocrit. Mandate 100+ oz water daily and retest BEFORE further interventions."},
+  {check:(a,v)=>a.libido<=2&&v["Free Testosterone"]&&v["Free Testosterone"].filter(x=>x!=null).slice(-1)[0]<15,sev:"warning",rec:"Low libido + Free T low-normal. Primary driver. Optimize."},
+  {check:(a,v)=>a.exercise<=1&&v["HDL"]&&v["HDL"].filter(x=>x!=null).slice(-1)[0]<40,sev:"warning",rec:"No exercise + HDL low. Aerobic exercise is #1 for raising HDL. 150+ min/week."},
+  {check:(a,v)=>a.digestion<=2&&v["ALT"]&&v["ALT"].filter(x=>x!=null).slice(-1)[0]>40,sev:"info",rec:"Poor digestion + ALT elevated. Liver stress contributing. Audit supplements."},
+];
+const RULES=[
+  {m:"Hematocrit",fn:v=>{const r=v.filter(x=>x!=null).slice(-2);return r.length>=2&&r.every(x=>x>51);},s:"critical",t:"Hematocrit elevated consecutive draws. Therapeutic phlebotomy. Evaluate testosterone dose."},
+  {m:"ALT",fn:v=>{const s=v.filter(x=>x!=null);if(s.length<2)return false;return s[s.length-1]>s[s.length-2]&&s[s.length-1]>50;},s:"critical",t:"ALT trending up above reference. Abdominal ultrasound. Audit liver-metabolized supplements."},
+  {m:"LDL",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>=160;},s:"critical",t:"LDL high-risk (160+). Dietary intervention. Consider ApoB/Lp(a) testing."},
+  {m:"Hemoglobin",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>17.7;},s:"warning",t:"Hemoglobin above reference. Correlates with hematocrit."},
+  {m:"MCV",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>97;},s:"warning",t:"MCV elevated (macrocytosis). Check B12/folate."},
+  {m:"Eosinophils %",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>5;},s:"info",t:"Eosinophils trending up. Consider allergy panel."},
+  {m:"HDL",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l<40;},s:"warning",t:"HDL below protective threshold. Omega-3, aerobic exercise, niacin."},
+  {m:"Triglycerides",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>150;},s:"warning",t:"Triglycerides elevated. Verify fasting. Reduce refined carbs."},
+  {m:"Ferritin",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>400;},s:"critical",t:"Ferritin above reference. Therapeutic phlebotomy."},
+  {m:"Vitamin D",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l<30;},s:"warning",t:"Vitamin D insufficient. Supplement 5-10K IU daily."},
+  {m:"Free Testosterone",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l<10;},s:"warning",t:"Free T below optimal. Evaluate SHBG and protocol."},
+  {m:"Estradiol",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>42.6;},s:"warning",t:"Estradiol elevated. Consider AI adjustment."},
+  {m:"IGF-1",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>290;},s:"info",t:"IGF-1 above range. Monitor GH/peptide dose."},
+  {m:"Prolactin",fn:v=>{const l=v.filter(x=>x!=null).slice(-1)[0];return l&&l>20;},s:"info",t:"Prolactin upper range. If trending up, pituitary MRI."},
+];
+
+// ── HELPERS ──
+const st=(v,m)=>{const d=MD[m];if(!d||v==null)return"none";if(v<d.lo)return"low";if(v>d.hi)return"high";return"ok";};
+const tr=(vals)=>{const v=vals.filter(x=>x!=null);if(v.length<2)return"flat";const p=((v[v.length-1]-v[v.length-2])/Math.abs(v[v.length-2]||1))*100;return p>5?"up":p<-5?"dn":"flat";};
+function runLR(d){const o=[];for(const r of RULES){const mv=d.values[r.m];if(!mv)continue;try{if(r.fn(mv))o.push({marker:r.m,sev:r.s,rec:r.t});}catch(e){}}o.sort((a,b)=>({critical:0,warning:1,info:2}[a.sev])-({critical:0,warning:1,info:2}[b.sev]));return o;}
+function runQR(qs,vals){if(!qs?.length)return[];const a=qs[qs.length-1].answers;const o=[];for(const r of QS_RULES){try{if(r.check(a,vals))o.push({sev:r.sev,rec:r.rec});}catch(e){}}return o;}
+
+// ── MARKER CARD ──
+function MCard({marker,values,draws,open,toggle}){
+  const d=MD[marker];if(!d)return null;
+  const vv=values.filter(v=>v!=null);if(!vv.length)return null;
+  const last=vv[vv.length-1];const li=values.length-1-[...values].reverse().findIndex(v=>v!=null);
+  const s=st(last,marker);const t=tr(values);const col=s==="ok"?"var(--green)":s==="high"?"var(--red)":"var(--amber)";
+  return(<div style={{background:"var(--card)",border:"1px solid "+(s==="high"||s==="low"?(s==="high"?SC.critical:SC.warning)+"30":"var(--border)"),borderRadius:14,overflow:"hidden"}}>
+    <div onClick={toggle} style={{padding:"15px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+        <span style={{display:"inline-block",width:9,height:9,borderRadius:"50%",background:col}}/>
+        <span style={{color:"var(--t2)",fontWeight:600,fontSize:14}}>{marker}</span>
+        <span style={{color:"var(--t7)",fontSize:11,fontFamily:"var(--mono)"}}>{d.u}</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{textAlign:"right"}}>
+          <span style={{color:col,fontWeight:700,fontSize:20,fontFamily:"var(--mono)"}}>{last}</span>
+          <span style={{color:"var(--t6)",fontSize:10.5,display:"block"}}>{draws[li]?.date}</span>
+        </div>
+        {t==="up"&&<span style={{color:"var(--red)"}}>&#9650;</span>}
+        {t==="dn"&&<span style={{color:"var(--green)"}}>&#9660;</span>}
+        <span style={{color:"var(--t6)"}}>{open?"&#9652;":"&#9662;"}</span>
+      </div>
+    </div>
+    {open&&<div style={{padding:"0 20px 20px"}}>
+      <SVGChart marker={marker} values={values} draws={draws} def={d}/>
+      <div style={{marginTop:14,display:"flex",flexWrap:"wrap",gap:7}}>
+        {draws.map((dr,i)=>values[i]!=null&&<div key={i} style={{background:"var(--bg)",borderRadius:7,padding:"5px 10px",fontSize:11,color:"var(--t5)",border:"1px solid var(--border)"}}>
+          <span style={{color:"var(--t2)",fontWeight:600}}>{dr.date}</span>{" | "}
+          <span style={{color:st(values[i],marker)==="ok"?"var(--green)":st(values[i],marker)==="high"?"var(--red)":"var(--amber)",fontFamily:"var(--mono)",fontWeight:600}}>{values[i]}</span>{" | "}{dr.lab}
+        </div>)}
+      </div>
+    </div>}
+  </div>);
+}
+
+// ── QUESTIONNAIRE ──
+function QS({questionnaire,values,onSave}){
+  const[a,sA]=useState({sleep:3,energy:3,libido:3,mood:3,hydration:3,brain_fog:1,joint_pain:1,digestion:3,stress:2,exercise:3});
+  const[saved,sS]=useState(false);
+  const qr=useMemo(()=>runQR([{answers:a}],values),[a,values]);
+  const prev=questionnaire?.length?questionnaire[questionnaire.length-1]:null;
+  const neg=k=>k==="brain_fog"||k==="joint_pain"||k==="stress";
+  return(<div>
+    <div className="qs-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
+      {QS_FIELDS.map(f=><div key={f.key} style={{background:"var(--card)",borderRadius:12,padding:"16px 18px",border:"1px solid var(--border)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"var(--t2)",fontWeight:600,fontSize:13}}>{f.label}</span>{prev?.answers?.[f.key]!=null&&<span style={{color:"var(--t7)",fontSize:11}}>Prev: {prev.answers[f.key]}/5</span>}</div>
+        <div style={{color:"var(--t6)",fontSize:11,marginBottom:10}}>{f.desc}</div>
+        <div style={{display:"flex",gap:6}}>{[1,2,3,4,5].map(n=>{const act=a[f.key]===n;const c=neg(f.key)?(n<=2?"var(--green)":n>=4?"var(--red)":"var(--amber)"):(n<=2?"var(--red)":n>=4?"var(--green)":"var(--amber)");return<button key={n} onClick={()=>sA({...a,[f.key]:n})} style={{flex:1,padding:"8px 4px",borderRadius:8,border:"1px solid "+(act?c+"60":"var(--border)"),background:act?c+"18":"transparent",color:act?c:"var(--t6)",cursor:"pointer",fontSize:12,fontWeight:act?700:400}}>{n}</button>})}</div>
+      </div>)}
+    </div>
+    {qr.length>0&&<div style={{marginBottom:20}}><h4 style={{color:"var(--amber)",fontSize:14,fontWeight:700,marginBottom:12}}>Cross-Reference Findings ({qr.length})</h4>{qr.map((r,i)=><div key={i} style={{background:"var(--card)",borderLeft:"4px solid "+SC[r.sev],borderRadius:"0 12px 12px 0",padding:"14px 18px",marginBottom:10}}><span style={{display:"inline-block",padding:"2px 10px",borderRadius:5,fontSize:9.5,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",background:SC[r.sev]+"14",color:SC[r.sev],marginBottom:8}}>MONITOR</span><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.7}}>{r.rec}</div></div>)}</div>}
+    <button onClick={()=>{onSave(a);sS(true);setTimeout(()=>sS(false),2000);}} style={{background:saved?"var(--green)":"linear-gradient(135deg,var(--green),#2a9d54)",border:"none",borderRadius:10,padding:"13px 28px",color:"var(--bg)",fontWeight:700,fontSize:14,cursor:"pointer"}}>{saved?"Saved!":"Save Questionnaire"}</button>
+  </div>);
+}
+
+// ── TIMELINE ──
+function TL({timeline}){return(<div>{timeline.map((e,i)=><div key={i} style={{display:"flex",gap:16}}>
+  <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:20,flexShrink:0}}><div style={{width:12,height:12,borderRadius:"50%",background:i===timeline.length-1?"var(--green)":"var(--border2)",border:"2px solid "+(i===timeline.length-1?"var(--green)":"var(--t7)")}}/>{i<timeline.length-1&&<div style={{width:2,flex:1,background:"var(--border)",marginTop:4,marginBottom:4}}/>}</div>
+  <div style={{background:"var(--card)",borderRadius:12,padding:"14px 18px",border:"1px solid var(--border)",marginBottom:14,flex:1}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{color:i===timeline.length-1?"var(--green)":"var(--t2)",fontWeight:700,fontSize:14}}>{e.date}</span>{i===timeline.length-1&&<span style={{padding:"2px 8px",borderRadius:5,fontSize:9,fontWeight:700,background:"var(--green)18",color:"var(--green)"}}>CURRENT</span>}</div><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.8}}>{e.notes}</div></div>
+</div>)}</div>);}
+
+// ── PDF UPLOADER ──
+function PDFUp({onDone,existing}){
+  const[files,setF]=useState([]);const[busy,setB]=useState(false);const[prog,setP]=useState("");const[res,setR]=useState([]);const ref=useRef();
+  const go=async()=>{setB(true);const out=[];for(let i=0;i<files.length;i++){setP("Reading "+files[i].name+"...");try{const b64=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=()=>no(new Error("Fail"));r.readAsDataURL(files[i]);});const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},{type:"text",text:"Extract ALL lab values. Match: "+Object.keys(MD).join(", ")+". Aliases: SGPT=ALT,SGOT=AST,GFR=eGFR,25-Hydroxy Vitamin D=Vitamin D,Hemoglobin A1c=HbA1c,Sex Hormone Binding Globulin=SHBG. ONLY JSON:\n{\"draws\":[{\"date\":\"Mar 2026\",\"lab\":\"Labcorp\",\"fasting\":true,\"markers\":{\"Hematocrit\":56.1}}],\"patient_name\":null,\"patient_dob\":null}"}]}]})});const d=await resp.json();const txt=d.content?.map(c=>c.text||"").join("")||"";out.push({file:files[i].name,data:JSON.parse(txt.replace(/```json|```/g,"").trim())});}catch(e){out.push({file:files[i].name,err:e.message});}}setR(out);setB(false);};
+  const totM=res.reduce((s,r)=>s+(r.data?.draws||[]).reduce((a,d)=>a+Object.keys(d.markers||{}).length,0),0);
+  return(<div style={{background:"var(--card)",borderRadius:14,border:"1px solid var(--border)",padding:24}}>
+    <h3 style={{margin:"0 0 6px",color:"var(--t2)",fontSize:16,fontWeight:700}}>Upload Lab PDFs</h3>
+    <p style={{color:"var(--t6)",fontSize:13,margin:"0 0 18px"}}>Drop Labcorp/Quest PDFs. AI extracts all markers.</p>
+    <div onClick={()=>ref.current?.click()} onDrop={e=>{e.preventDefault();setF(p=>[...p,...Array.from(e.dataTransfer.files).filter(f=>f.type==="application/pdf")]);}} onDragOver={e=>e.preventDefault()} style={{border:"2px dashed var(--border2)",borderRadius:12,padding:"36px 20px",textAlign:"center",cursor:"pointer",background:"var(--bg)"}}><input ref={ref} type="file" accept=".pdf" multiple onChange={e=>setF(p=>[...p,...Array.from(e.target.files||[]).filter(f=>f.type==="application/pdf")])} style={{display:"none"}}/><div style={{color:"var(--t5)",fontSize:14,fontWeight:500}}>Drop PDFs here or click to browse</div></div>
+    {files.length>0&&<div style={{marginTop:12}}>{files.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:"var(--bg)",borderRadius:9,border:"1px solid var(--border)",marginBottom:6}}><span style={{color:"var(--t4)",flex:1,fontSize:13}}>{f.name}</span>{!busy&&<span onClick={()=>setF(files.filter((_,x)=>x!==i))} style={{cursor:"pointer",color:"var(--t6)"}}>x</span>}</div>)}</div>}
+    {files.length>0&&!busy&&!res.length&&<button onClick={go} style={{marginTop:12,background:"linear-gradient(135deg,var(--green),#2a9d54)",border:"none",borderRadius:10,padding:"13px",color:"var(--bg)",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%"}}>Extract from {files.length} PDF{files.length>1?"s":""}</button>}
+    {busy&&<div style={{textAlign:"center",padding:"24px 0"}}><div style={{width:24,height:24,border:"3px solid var(--green)",borderTop:"3px solid transparent",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 10px"}}/><div style={{color:"var(--green)",fontWeight:600}}>{prog}</div></div>}
+    {res.length>0&&<div style={{marginTop:16}}><div style={{background:"var(--bg)",borderRadius:12,padding:18,border:"1px solid var(--border)",marginBottom:14}}><div style={{color:"var(--green)",fontWeight:700,marginBottom:10}}>Extraction Complete - {totM} markers</div>{res.map((r,i)=><div key={i}><span style={{color:"var(--t4)",fontWeight:600}}>{r.file}</span>{r.err&&<span style={{color:"var(--red)"}}> - {r.err}</span>}{r.data?.draws?.map((d,di)=><div key={di} style={{marginTop:5,padding:"7px 12px",background:"var(--card)",borderRadius:7,border:"1px solid var(--border)",fontSize:12,color:"var(--t5)"}}>{d.date} | {d.lab} | <span style={{color:"var(--green)"}}>{Object.keys(d.markers||{}).length} markers</span></div>)}</div>)}</div><div style={{display:"flex",gap:12}}><button onClick={()=>{setR([]);setF([]);}} style={{flex:1,background:"var(--border)",border:"none",borderRadius:10,padding:13,color:"var(--t5)",cursor:"pointer"}}>Reset</button><button onClick={()=>onDone(res)} style={{flex:2,background:"linear-gradient(135deg,var(--green),#2a9d54)",border:"none",borderRadius:10,padding:13,color:"var(--bg)",fontWeight:700,cursor:"pointer"}}>Load Into Dashboard</button></div></div>}
+  </div>);
+}
+
+// ── TREATMENT PLAN ENGINE ──
+
+function generatePlan(data,labRecs,qsRecs){
+  const glv=(marker)=>{const v=data.values[marker];if(!v)return null;const vl=v.filter(x=>x!=null);return vl.length?vl[vl.length-1]:null;};
+  const plan=[];const seen=new Set();
+  const TX=[
+    {markers:["Hematocrit"],check:()=>st(glv("Hematocrit"),"Hematocrit")==="high",cat:"Procedure",action:"Therapeutic Phlebotomy",detail:"Schedule phlebotomy to reduce hematocrit below 50%. Repeat every 4-8 weeks until normalized.",freq:"Every 4-8 weeks",followup:"Recheck CBC in 4 weeks post-phlebotomy",priority:"high"},
+    {markers:["Hematocrit"],check:()=>glv("Hematocrit")>51,cat:"Lifestyle",action:"Increase Hydration",detail:"Minimum 100 oz water daily. Dehydration artificially elevates hematocrit readings.",freq:"Daily",followup:"Assess at next visit",priority:"high"},
+    {markers:["ALT"],check:()=>glv("ALT")>50,cat:"Diagnostic",action:"Abdominal Ultrasound",detail:"Evaluate for hepatic steatosis. ALT trending upward with stable AST suggests liver stress.",freq:"One-time",followup:"Review results, reassess supplement load",priority:"high"},
+    {markers:["ALT"],check:()=>glv("ALT")>40,cat:"Supplement",action:"Liver Support Protocol",detail:"NAC 600mg 2x/day, Milk Thistle 250mg/day. Audit and reduce hepatotoxic supplements.",freq:"Daily",followup:"Recheck ALT in 8 weeks",priority:"med"},
+    {markers:["LDL"],check:()=>glv("LDL")>=160,cat:"Diagnostic",action:"Advanced Lipid Testing",detail:"Order ApoB and Lp(a) for refined cardiovascular risk assessment.",freq:"One-time",followup:"Review for statin consideration",priority:"high"},
+    {markers:["LDL"],check:()=>glv("LDL")>=130,cat:"Lifestyle",action:"Dietary Lipid Intervention",detail:"Reduce saturated fat. Increase soluble fiber (oats, beans, flaxseed). Consider plant sterols.",freq:"Daily",followup:"Recheck fasting lipids in 12 weeks",priority:"med"},
+    {markers:["HDL"],check:()=>glv("HDL")!=null&&glv("HDL")<40,cat:"Supplement",action:"Omega-3 Fatty Acids",detail:"EPA/DHA 2-4g daily (pharmaceutical grade).",freq:"Daily",followup:"Recheck lipids in 12 weeks",priority:"med"},
+    {markers:["HDL"],check:()=>glv("HDL")!=null&&glv("HDL")<40,cat:"Lifestyle",action:"Aerobic Exercise Protocol",detail:"Minimum 150 minutes/week moderate-intensity cardio. Zone 2 training. Most effective HDL intervention.",freq:"5x/week",followup:"Assess compliance next visit",priority:"med"},
+    {markers:["Vitamin D"],check:()=>glv("Vitamin D")!=null&&glv("Vitamin D")<30,cat:"Supplement",action:"Vitamin D3 Supplementation",detail:"5,000-10,000 IU daily with fat-containing meal. Use D3 (cholecalciferol).",freq:"Daily",followup:"Recheck 25-OH Vitamin D in 8-12 weeks",priority:"med"},
+    {markers:["Ferritin"],check:()=>glv("Ferritin")>400,cat:"Procedure",action:"Therapeutic Phlebotomy (Iron)",detail:"Phlebotomy to reduce ferritin below 300. Iron overload causes hepatic stress.",freq:"Every 4-8 weeks",followup:"Recheck ferritin in 4 weeks",priority:"high"},
+    {markers:["Free Testosterone"],check:()=>glv("Free Testosterone")!=null&&glv("Free Testosterone")<15,cat:"HRT",action:"Evaluate Testosterone Protocol",detail:"Free T low-normal. Assess SHBG. Consider dose adjustment, frequency change, or delivery switch.",freq:"Protocol review",followup:"Recheck free T and SHBG in 6-8 weeks",priority:"med"},
+    {markers:["Estradiol"],check:()=>glv("Estradiol")>42.6,cat:"HRT",action:"Aromatase Inhibitor Adjustment",detail:"If symptomatic, consider anastrozole 0.25-0.5mg 2x/week. Target 20-35 pg/mL.",freq:"2x/week if initiated",followup:"Recheck E2 in 4-6 weeks",priority:"med"},
+    {markers:["MCV"],check:()=>glv("MCV")>97,cat:"Diagnostic",action:"Macrocytosis Workup",detail:"Check folate. Review alcohol and medications. If B12 adequate, investigate further.",freq:"One-time",followup:"Review results",priority:"low"},
+    {markers:["Eosinophils %"],check:()=>glv("Eosinophils %")>5,cat:"Diagnostic",action:"Allergy Panel",detail:"Eosinophils trending up. Order allergy panel, IgE. Review medications.",freq:"One-time",followup:"Review results",priority:"low"},
+    {markers:["IGF-1"],check:()=>glv("IGF-1")>290,cat:"HRT",action:"Review GH/Peptide Dosing",detail:"IGF-1 above range. Consider dose reduction if on GH or secretagogues.",freq:"Protocol review",followup:"Recheck IGF-1 in 8 weeks",priority:"low"},
+    {markers:["Triglycerides"],check:()=>glv("Triglycerides")>150,cat:"Lifestyle",action:"Reduce Refined Carbohydrates",detail:"Eliminate added sugars, reduce alcohol. Whole food carb sources only.",freq:"Daily",followup:"Recheck fasting trigs in 8 weeks",priority:"med"},
+  ];
+  for(const tx of TX){try{if(tx.check()){const key=tx.action+tx.cat;if(!seen.has(key)){seen.add(key);plan.push({...tx,source:tx.markers[0],id:Math.random().toString(36).slice(2,8),active:true,edited:false});}}}catch(e){}}
+  return plan;
+}
+
+// ── TREATMENT PLAN COMPONENT ──
+function TreatmentPlan({data,labRecs,qsRecs}){
+  const initial=useMemo(()=>generatePlan(data,labRecs,qsRecs),[data,labRecs,qsRecs]);
+  const[items,setItems]=useState(initial);
+  const[customAction,setCA]=useState("");
+  const[customDetail,setCD]=useState("");
+  const[customCat,setCC]=useState("Supplement");
+  const[customFreq,setCF]=useState("");
+  const[customFU,setCU]=useState("");
+  const[showAdd,setSA]=useState(false);
+
+  // Sync when recs change
+  useMemo(()=>{setItems(initial);},[initial]);
+
+  const toggleActive=(id)=>setItems(items.map(x=>x.id===id?{...x,active:!x.active}:x));
+  const removeItem=(id)=>setItems(items.filter(x=>x.id!==id));
+  const updateField=(id,field,val)=>setItems(items.map(x=>x.id===id?{...x,[field]:val,edited:true}:x));
+
+  const addCustom=()=>{
+    if(!customAction.trim())return;
+    setItems([...items,{cat:customCat,action:customAction,detail:customDetail,freq:customFreq,followup:customFU,priority:"med",source:"Provider",id:Math.random().toString(36).slice(2,8),active:true,edited:true}]);
+    setCA("");setCD("");setCF("");setCU("");setSA(false);
+  };
+
+  const catColors={Procedure:"#e05252",Diagnostic:"#4a90d9",Supplement:"#3bba6a",Lifestyle:"#2eb8c9",HRT:"#9370e0"};
+  const priColors={high:"#e05252",med:"#d4973b",low:"#4a90d9"};
+  const activeItems=items.filter(x=>x.active);
+  const inactiveItems=items.filter(x=>!x.active);
+
+  return(<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+      <div style={{color:"var(--t5)",fontSize:13}}>Auto-generated from lab flags and questionnaire. Edit any field, remove items, or add your own.</div>
+      <button onClick={()=>setSA(!showAdd)} style={{background:"linear-gradient(135deg,var(--green),#2a9d54)",border:"none",borderRadius:9,padding:"9px 18px",color:"var(--bg)",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>{showAdd?"Cancel":"+ Add Item"}</button>
+    </div>
+
+    {/* Add custom item */}
+    {showAdd&&<div style={{background:"var(--card)",borderRadius:12,padding:20,border:"1px solid var(--green)30",marginBottom:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+        <div><label style={{color:"var(--t5)",fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>Action</label><input value={customAction} onChange={e=>setCA(e.target.value)} placeholder="e.g. Start BPC-157" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",color:"var(--t2)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+        <div><label style={{color:"var(--t5)",fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>Category</label><select value={customCat} onChange={e=>setCC(e.target.value)} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",color:"var(--t2)",fontSize:13,outline:"none"}}><option>Supplement</option><option>HRT</option><option>Lifestyle</option><option>Procedure</option><option>Diagnostic</option><option>Peptide</option><option>Medication</option></select></div>
+      </div>
+      <div style={{marginBottom:12}}><label style={{color:"var(--t5)",fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>Details / Dosing</label><input value={customDetail} onChange={e=>setCD(e.target.value)} placeholder="e.g. 250mcg subQ daily for 4 weeks" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",color:"var(--t2)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+        <div><label style={{color:"var(--t5)",fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>Frequency</label><input value={customFreq} onChange={e=>setCF(e.target.value)} placeholder="e.g. Daily" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",color:"var(--t2)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+        <div><label style={{color:"var(--t5)",fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>Follow-up</label><input value={customFU} onChange={e=>setCU(e.target.value)} placeholder="e.g. Recheck in 8 weeks" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",color:"var(--t2)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+      </div>
+      <button onClick={addCustom} style={{background:"var(--green)",border:"none",borderRadius:8,padding:"10px 24px",color:"var(--bg)",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add to Plan</button>
+    </div>}
+
+    {/* Active items */}
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {activeItems.map(item=><div key={item.id} style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--border)",overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px",borderBottom:"1px solid var(--border)"}}>
+          <span style={{padding:"3px 10px",borderRadius:5,fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",background:(catColors[item.cat]||"var(--purple)")+"18",color:catColors[item.cat]||"var(--purple)",border:"1px solid "+(catColors[item.cat]||"var(--purple)")+"30"}}>{item.cat}</span>
+          <input value={item.action} onChange={e=>updateField(item.id,"action",e.target.value)} style={{flex:1,background:"transparent",border:"none",color:"var(--t1)",fontSize:15,fontWeight:700,outline:"none",fontFamily:"var(--font)"}}/>
+          <span style={{width:8,height:8,borderRadius:"50%",background:priColors[item.priority]||"var(--amber)"}} title={item.priority+" priority"}/>
+          <span style={{color:"var(--t7)",fontSize:11}}>via {item.source}</span>
+          {item.edited&&<span style={{color:"var(--amber)",fontSize:10,fontWeight:600}}>EDITED</span>}
+          <button onClick={()=>toggleActive(item.id)} style={{background:"none",border:"none",color:"var(--t6)",cursor:"pointer",fontSize:11,padding:"4px 8px"}}>skip</button>
+          <button onClick={()=>removeItem(item.id)} style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer",fontSize:14,padding:"4px 8px"}}>x</button>
+        </div>
+        <div style={{padding:"12px 18px",display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+          <div><label style={{color:"var(--t6)",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Details / Dosing</label><textarea value={item.detail} onChange={e=>updateField(item.id,"detail",e.target.value)} rows={2} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",color:"var(--t3)",fontSize:13,outline:"none",resize:"vertical",fontFamily:"var(--font)",boxSizing:"border-box",marginTop:4}}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div><label style={{color:"var(--t6)",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Frequency</label><input value={item.freq} onChange={e=>updateField(item.id,"freq",e.target.value)} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",color:"var(--t3)",fontSize:13,outline:"none",fontFamily:"var(--font)",boxSizing:"border-box",marginTop:4}}/></div>
+            <div><label style={{color:"var(--t6)",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Follow-up</label><input value={item.followup} onChange={e=>updateField(item.id,"followup",e.target.value)} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",color:"var(--t3)",fontSize:13,outline:"none",fontFamily:"var(--font)",boxSizing:"border-box",marginTop:4}}/></div>
+          </div>
+        </div>
+      </div>)}
+    </div>
+
+    {/* Skipped items */}
+    {inactiveItems.length>0&&<div style={{marginTop:24}}>
+      <h4 style={{color:"var(--t6)",fontSize:13,fontWeight:600,marginBottom:10}}>Skipped ({inactiveItems.length})</h4>
+      {inactiveItems.map(item=><div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",background:"var(--bg)",borderRadius:9,border:"1px solid var(--border)",marginBottom:6,opacity:0.6}}>
+        <span style={{color:"var(--t5)",fontSize:13,flex:1,textDecoration:"line-through"}}>{item.action}</span>
+        <span style={{color:"var(--t7)",fontSize:11}}>{item.cat}</span>
+        <button onClick={()=>toggleActive(item.id)} style={{background:"var(--border)",border:"none",borderRadius:6,padding:"5px 12px",color:"var(--t4)",cursor:"pointer",fontSize:11}}>restore</button>
+      </div>)}
+    </div>}
+
+    {/* Plan summary count */}
+    <div style={{marginTop:24,padding:"14px 18px",background:"var(--bg)",borderRadius:10,border:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div style={{color:"var(--t5)",fontSize:13}}><strong style={{color:"var(--t2)"}}>{activeItems.length}</strong> active treatment items | <strong style={{color:priColors.high}}>{activeItems.filter(x=>x.priority==="high").length}</strong> high priority</div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {Object.entries(catColors).map(([k,c])=>{const n=activeItems.filter(x=>x.cat===k).length;if(!n)return null;return<span key={k} style={{padding:"3px 10px",borderRadius:5,fontSize:10,fontWeight:600,background:c+"14",color:c}}>{k}: {n}</span>;})}
+      </div>
+    </div>
+
+    {/* Export PDF */}
+    <button onClick={()=>{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({unit:"mm",format:"letter"});
+      const W=doc.internal.pageSize.getWidth();
+      const mg=18;let y=20;
+      const addPage=()=>{doc.addPage();y=20;};
+      const checkY=(need)=>{if(y+need>260){addPage();}};
+
+      // Header
+      doc.setFillColor(8,12,22);doc.rect(0,0,W,38,"F");
+      doc.setTextColor(59,186,106);doc.setFontSize(22);doc.setFont("helvetica","bold");
+      doc.text("MedLabIQ",mg,16);
+      doc.setTextColor(180,186,200);doc.setFontSize(10);doc.setFont("helvetica","normal");
+      doc.text("Treatment Plan",mg,23);
+      doc.setTextColor(122,134,153);doc.setFontSize(9);
+      doc.text("Patient: "+(data.patient.name||"Unknown")+"  |  DOB: "+(data.patient.dob||"N/A")+"  |  Generated: "+new Date().toLocaleDateString(),mg,30);
+      y=46;
+
+      // Priority summary
+      doc.setTextColor(60,60,60);doc.setFontSize(9);doc.setFont("helvetica","bold");
+      const hiP=activeItems.filter(x=>x.priority==="high").length;
+      const mdP=activeItems.filter(x=>x.priority==="med").length;
+      const loP=activeItems.filter(x=>x.priority==="low").length;
+      doc.text(activeItems.length+" Active Items  |  "+hiP+" High Priority  |  "+mdP+" Medium  |  "+loP+" Low",mg,y);
+      y+=10;
+
+      // Group by category
+      const groups={};for(const item of activeItems){if(!groups[item.cat])groups[item.cat]=[];groups[item.cat].push(item);}
+
+      for(const[cat,items]of Object.entries(groups)){
+        checkY(20);
+        // Category header
+        doc.setFillColor(240,244,248);doc.rect(mg-2,y-4,W-mg*2+4,8,"F");
+        doc.setTextColor(40,40,40);doc.setFontSize(11);doc.setFont("helvetica","bold");
+        doc.text(cat.toUpperCase(),mg,y+1);
+        y+=12;
+
+        for(const item of items){
+          checkY(35);
+          // Priority indicator
+          const pc=item.priority==="high"?[224,82,82]:item.priority==="med"?[212,151,59]:[74,144,217];
+          doc.setFillColor(...pc);doc.circle(mg+2,y-1,1.5,"F");
+
+          // Action name
+          doc.setTextColor(30,30,30);doc.setFontSize(11);doc.setFont("helvetica","bold");
+          doc.text(item.action,mg+7,y);
+          if(item.edited){doc.setTextColor(212,151,59);doc.setFontSize(7);doc.text("EDITED",mg+7+doc.getTextWidth(item.action)+3,y);}
+          y+=6;
+
+          // Detail
+          doc.setTextColor(80,80,80);doc.setFontSize(9);doc.setFont("helvetica","normal");
+          const detailLines=doc.splitTextToSize(item.detail||"",W-mg*2-7);
+          doc.text(detailLines,mg+7,y);
+          y+=detailLines.length*4.5;
+
+          // Freq + followup
+          doc.setTextColor(100,110,120);doc.setFontSize(8);
+          doc.text("Frequency: "+(item.freq||"--")+"     Follow-up: "+(item.followup||"--"),mg+7,y);
+          y+=8;
+
+          // Separator
+          doc.setDrawColor(220,220,220);doc.line(mg,y-2,W-mg,y-2);
+          y+=4;
+        }
+        y+=4;
+      }
+
+      // Footer
+      checkY(20);
+      doc.setDrawColor(180,180,180);doc.line(mg,y,W-mg,y);y+=6;
+      doc.setTextColor(150,150,150);doc.setFontSize(7);doc.setFont("helvetica","normal");
+      doc.text("Auto-generated by MedLabIQ. This treatment plan is a clinical decision support output and does not constitute",mg,y);y+=3.5;
+      doc.text("a prescription or medical order. All items must be reviewed and authorized by the treating provider.",mg,y);y+=5;
+      doc.text("Provider Signature: ________________________________     Date: ________________",mg,y);
+
+      doc.save("MedLabIQ_Treatment_Plan_"+(data.patient.name||"Patient").replace(/\s/g,"_")+".pdf");
+    }} style={{marginTop:16,width:"100%",background:"linear-gradient(135deg,var(--purple),#6d4ec4)",border:"none",borderRadius:10,padding:"14px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      &#128196; Export Treatment Plan as PDF
+    </button>
+  </div>);
+}
+
+// ── ADMIN / PRACTITIONER PORTAL ──
+function AdminPortal({onSelectPatient,onBack}){
+  const[adminTab,setAT]=useState("roster");
+  const[search,setSrc]=useState("");
+  const[filterStatus,setFS]=useState("all");
+  const[filterProvider,setFP]=useState("all");
+  const[sortBy,setSB]=useState("name");
+
+  const totalPatients=CLINIC_PATIENTS.length;
+  const activePatients=CLINIC_PATIENTS.filter(p=>p.status==="active").length;
+  const totalCritFlags=CLINIC_PATIENTS.reduce((s,p)=>s+p.critFlags,0);
+  const labsOverdue=CLINIC_PATIENTS.filter(p=>p.labsDue).length;
+  const unsignedPlans=CLINIC_PATIENTS.filter(p=>p.planStatus==="draft"||p.planStatus==="none").length;
+
+  let filtered=CLINIC_PATIENTS.filter(p=>{
+    if(filterStatus!=="all"&&p.status!==filterStatus)return false;
+    if(filterProvider!=="all"&&p.provider!==filterProvider)return false;
+    if(search&&!p.name.toLowerCase().includes(search.toLowerCase())&&!p.id.toLowerCase().includes(search.toLowerCase()))return false;
+    return true;
+  });
+  if(sortBy==="name")filtered.sort((a,b)=>a.name.localeCompare(b.name));
+  if(sortBy==="flags")filtered.sort((a,b)=>(b.critFlags+b.warnFlags)-(a.critFlags+a.warnFlags));
+  if(sortBy==="lastDraw")filtered.sort((a,b)=>a.lastDraw.localeCompare(b.lastDraw));
+  if(sortBy==="labsDue")filtered.sort((a,b)=>(b.labsDue?1:0)-(a.labsDue?1:0));
+
+  const atabs=[{k:"roster",l:"Patient Roster"},{k:"overdue",l:"Overdue Labs ("+labsOverdue+")"},{k:"flags",l:"Active Flags ("+totalCritFlags+")"},{k:"providers",l:"Providers"},{k:"audit",l:"Audit Log"}];
+
+  return(<div style={{fontFamily:"var(--font)",background:"var(--bg)",minHeight:"100vh",color:"var(--t3)"}}>
+    <div style={{background:"linear-gradient(180deg,#0c1220,var(--card))",borderBottom:"1px solid var(--border)",padding:"18px 24px"}}>
+      <div className="hdr-wrap" style={{maxWidth:1400,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+        <a href="/" style={{display:"flex",alignItems:"center",gap:12,textDecoration:"none"}}><div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,var(--green),var(--cyan))",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:18,color:"var(--bg)",fontFamily:"Manrope"}}>M</div><div><div style={{fontSize:17,fontWeight:800,color:"var(--t1)",fontFamily:"var(--head)"}}>MedLabIQ</div><div style={{fontSize:11,color:"var(--t7)"}}>Clinic Administration</div></div></a>
+        <div className="hdr-right" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{background:"var(--purple)15",border:"1px solid var(--purple)30",borderRadius:8,padding:"6px 14px",fontSize:12,color:"var(--purple)",fontWeight:600}}>ADMIN</div>
+          <div style={{background:"var(--card)",borderRadius:9,padding:"8px 14px",border:"1px solid var(--border)",fontSize:13}}><span style={{color:"var(--t6)"}}>Elevate Health </span><span style={{color:"var(--t2)",fontWeight:600}}>{totalPatients} patients</span></div>
+          <button onClick={onBack} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:8,padding:"8px 14px",color:"var(--t4)",cursor:"pointer",fontSize:12}}>Patient View</button>
+        </div>
+      </div>
+    </div>
+
+    <div className="page-pad" style={{maxWidth:1400,margin:"0 auto",padding:24}}>
+      {/* Clinic Stats */}
+      <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:12,marginBottom:26}}>
+        {[
+          {l:"Active Patients",v:activePatients,c:"var(--green)",s:"of "+totalPatients+" total"},
+          {l:"Critical Flags",v:totalCritFlags,c:totalCritFlags>0?"var(--red)":"var(--green)",s:"across all patients"},
+          {l:"Labs Overdue",v:labsOverdue,c:labsOverdue>0?"var(--amber)":"var(--green)",s:"patients need draws"},
+          {l:"Unsigned Plans",v:unsignedPlans,c:unsignedPlans>0?"var(--amber)":"var(--green)",s:"draft or missing"},
+          {l:"Providers",v:CLINIC_PROVIDERS.length,c:"var(--cyan)",s:"active"},
+        ].map((x,i)=><div key={i} style={{background:"var(--card)",borderRadius:14,padding:"16px 20px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>{x.l}</div><div className="sn" style={{fontSize:30,fontWeight:800,color:x.c,fontFamily:"var(--mono)",marginTop:4}}>{x.v}</div><div style={{fontSize:11,color:"var(--t7)"}}>{x.s}</div></div>)}
+      </div>
+
+      {/* Admin Tabs */}
+      <div className="tab-nav" style={{display:"flex",gap:3,marginBottom:26,background:"var(--card)",borderRadius:12,padding:4,border:"1px solid var(--border)",flexWrap:"wrap"}}>
+        {atabs.map(t=><button key={t.k} onClick={()=>setAT(t.k)} style={{flex:"1 1 auto",padding:"11px 14px",border:"none",borderRadius:9,background:adminTab===t.k?"var(--border)":"transparent",color:adminTab===t.k?"var(--t2)":"var(--t6)",cursor:"pointer",fontSize:12.5,fontWeight:adminTab===t.k?600:400,whiteSpace:"nowrap"}}>{t.l}</button>)}
+      </div>
+
+      {/* PATIENT ROSTER */}
+      {adminTab==="roster"&&<div>
+        <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+          <input value={search} onChange={e=>setSrc(e.target.value)} placeholder="Search patients..." style={{flex:1,minWidth:200,background:"var(--card)",border:"1px solid var(--border)",borderRadius:9,padding:"10px 14px",color:"var(--t2)",fontSize:13,outline:"none"}}/>
+          <select value={filterStatus} onChange={e=>setFS(e.target.value)} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:9,padding:"10px 14px",color:"var(--t3)",fontSize:13}}>
+            <option value="all">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option>
+          </select>
+          <select value={filterProvider} onChange={e=>setFP(e.target.value)} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:9,padding:"10px 14px",color:"var(--t3)",fontSize:13}}>
+            <option value="all">All Providers</option>{CLINIC_PROVIDERS.map(pr=><option key={pr.name} value={pr.name}>{pr.name}</option>)}
+          </select>
+          <select value={sortBy} onChange={e=>setSB(e.target.value)} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:9,padding:"10px 14px",color:"var(--t3)",fontSize:13}}>
+            <option value="name">Sort: Name</option><option value="flags">Sort: Most Flags</option><option value="labsDue">Sort: Labs Due</option>
+          </select>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {filtered.map(pt=>{
+            const hasFlags=pt.critFlags>0||pt.warnFlags>0;
+            return(<div key={pt.id} onClick={()=>onSelectPatient(pt)} style={{background:"var(--card)",borderRadius:12,padding:"14px 20px",border:"1px solid "+(pt.critFlags>0?"var(--red)20":pt.labsDue?"var(--amber)20":"var(--border)"),cursor:"pointer",display:"flex",alignItems:"center",gap:16,transition:"all 0.15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--green)"} onMouseLeave={e=>e.currentTarget.style.borderColor=pt.critFlags>0?"#e0525220":pt.labsDue?"#d4973b20":"#182035"}>
+              <div style={{width:40,height:40,borderRadius:10,background:pt.status==="active"?"var(--border2)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:15,color:pt.status==="active"?"var(--t2)":"var(--t6)",flexShrink:0}}>{pt.name.split(" ").map(n=>n[0]).join("")}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"var(--t1)",fontWeight:700,fontSize:14}}>{pt.name}</span>{pt.status==="inactive"&&<span style={{padding:"1px 8px",borderRadius:4,fontSize:9,fontWeight:600,background:"var(--t6)20",color:"var(--t6)"}}>INACTIVE</span>}</div>
+                <div style={{color:"var(--t5)",fontSize:12,marginTop:2}}>{pt.id} | {pt.gender} | DOB: {pt.dob} | Provider: {pt.provider}</div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,flexWrap:"wrap"}}>
+                {pt.critFlags>0&&<span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700,background:"var(--red)14",color:"var(--red)"}}>{pt.critFlags} CRIT</span>}
+                {pt.warnFlags>0&&<span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700,background:"var(--amber)14",color:"var(--amber)"}}>{pt.warnFlags} WARN</span>}
+                {pt.labsDue&&<span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700,background:"var(--purple)14",color:"var(--purple)"}}>LABS DUE</span>}
+                <span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:pt.planStatus==="signed"?"var(--green)14":pt.planStatus==="draft"?"var(--amber)14":"var(--t6)14",color:pt.planStatus==="signed"?"var(--green)":pt.planStatus==="draft"?"var(--amber)":"var(--t6)"}}>{pt.planStatus==="signed"?"PLAN SIGNED":pt.planStatus==="draft"?"PLAN DRAFT":"NO PLAN"}</span>
+                <div style={{color:"var(--t5)",fontSize:11,textAlign:"right",minWidth:70}}><div>{pt.draws} draws</div><div>Last: {pt.lastDraw}</div></div>
+              </div>
+            </div>);
+          })}
+        </div>
+        <div style={{marginTop:16,color:"var(--t6)",fontSize:12}}>{filtered.length} of {totalPatients} patients shown</div>
+      </div>}
+
+      {/* OVERDUE LABS */}
+      {adminTab==="overdue"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:18}}>Patients who need follow-up labs. Sorted by urgency.</div>
+        {CLINIC_PATIENTS.filter(p=>p.labsDue).sort((a,b)=>a.lastDraw.localeCompare(b.lastDraw)).map(pt=><div key={pt.id} onClick={()=>onSelectPatient(pt)} style={{background:"var(--card)",borderRadius:12,padding:"16px 20px",border:"1px solid var(--amber)20",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16}}>
+          <div><span style={{color:"var(--t1)",fontWeight:700,fontSize:14}}>{pt.name}</span><span style={{color:"var(--t5)",fontSize:12,marginLeft:10}}>Last draw: {pt.lastDraw}</span></div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{color:"var(--t5)",fontSize:12}}>Provider: {pt.provider}</span>
+            <button onClick={e=>{e.stopPropagation();}} style={{background:"var(--amber)",border:"none",borderRadius:7,padding:"7px 14px",color:"var(--bg)",fontWeight:700,fontSize:11,cursor:"pointer"}}>Send Reminder</button>
+          </div>
+        </div>)}
+      </div>}
+
+      {/* ACTIVE FLAGS */}
+      {adminTab==="flags"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:18}}>All patients with critical or warning flags. Click to open patient dashboard.</div>
+        {CLINIC_PATIENTS.filter(p=>p.critFlags>0||p.warnFlags>0).sort((a,b)=>b.critFlags-a.critFlags).map(pt=><div key={pt.id} onClick={()=>onSelectPatient(pt)} style={{background:"var(--card)",borderRadius:12,padding:"16px 20px",border:"1px solid "+(pt.critFlags>0?"var(--red)":"var(--amber)")+"20",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:36,height:36,borderRadius:9,background:"var(--border2)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14,color:"var(--t2)"}}>{pt.name.split(" ").map(n=>n[0]).join("")}</div>
+            <div><div style={{color:"var(--t1)",fontWeight:700,fontSize:14}}>{pt.name}</div><div style={{color:"var(--t5)",fontSize:12}}>{pt.draws} draws | Last: {pt.lastDraw} | {pt.provider}</div></div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            {pt.critFlags>0&&<span style={{padding:"4px 12px",borderRadius:6,fontSize:11,fontWeight:700,background:"var(--red)14",color:"var(--red)"}}>{pt.critFlags} Critical</span>}
+            {pt.warnFlags>0&&<span style={{padding:"4px 12px",borderRadius:6,fontSize:11,fontWeight:700,background:"var(--amber)14",color:"var(--amber)"}}>{pt.warnFlags} Warning</span>}
+          </div>
+        </div>)}
+      </div>}
+
+      {/* PROVIDERS */}
+      {adminTab==="providers"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:18}}>Clinic providers and their patient load.</div>
+        {CLINIC_PROVIDERS.map((pr,i)=>{
+          const prPatients=CLINIC_PATIENTS.filter(p=>p.provider===pr.name);
+          const prCrit=prPatients.reduce((s,p)=>s+p.critFlags,0);
+          const prOverdue=prPatients.filter(p=>p.labsDue).length;
+          return(<div key={i} style={{background:"var(--card)",borderRadius:14,padding:24,border:"1px solid var(--border)",marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div><div style={{color:"var(--t1)",fontWeight:700,fontSize:17}}>{pr.name}</div><div style={{color:"var(--t5)",fontSize:13}}>{pr.role}</div></div>
+              <span style={{padding:"4px 12px",borderRadius:6,fontSize:11,fontWeight:600,background:pr.active?"var(--green)14":"var(--t6)14",color:pr.active?"var(--green)":"var(--t6)"}}>{pr.active?"ACTIVE":"INACTIVE"}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+              <div style={{background:"var(--bg)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10,textTransform:"uppercase",fontWeight:600}}>Patients</div><div style={{color:"var(--t1)",fontSize:22,fontWeight:800,fontFamily:"var(--mono)"}}>{prPatients.length}</div></div>
+              <div style={{background:"var(--bg)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10,textTransform:"uppercase",fontWeight:600}}>Critical Flags</div><div style={{color:prCrit>0?"var(--red)":"var(--green)",fontSize:22,fontWeight:800,fontFamily:"var(--mono)"}}>{prCrit}</div></div>
+              <div style={{background:"var(--bg)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10,textTransform:"uppercase",fontWeight:600}}>Labs Overdue</div><div style={{color:prOverdue>0?"var(--amber)":"var(--green)",fontSize:22,fontWeight:800,fontFamily:"var(--mono)"}}>{prOverdue}</div></div>
+              <div style={{background:"var(--bg)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10,textTransform:"uppercase",fontWeight:600}}>Plans Signed</div><div style={{color:"var(--t1)",fontSize:22,fontWeight:800,fontFamily:"var(--mono)"}}>{prPatients.filter(p=>p.planStatus==="signed").length}</div></div>
+            </div>
+          </div>);
+        })}
+      </div>}
+
+      {/* AUDIT LOG */}
+      {adminTab==="audit"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:18}}>System audit trail. Every action logged for compliance and liability protection.</div>
+        {AUDIT_LOG.map((log,i)=><div key={i} style={{display:"flex",gap:14,padding:"12px 0",borderBottom:"1px solid var(--border)"}}>
+          <div style={{color:"var(--t6)",fontSize:11,fontFamily:"var(--mono)",minWidth:160,flexShrink:0}}>{log.time}</div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+              <span style={{color:log.user==="System"?"var(--cyan)":"var(--t2)",fontWeight:600,fontSize:13}}>{log.user}</span>
+              <span style={{color:"var(--t5)",fontSize:12}}>{log.action}</span>
+            </div>
+            <div style={{color:"var(--t5)",fontSize:12}}>{log.entity} {log.detail&&<span style={{color:"var(--t6)"}}>| {log.detail}</span>}</div>
+          </div>
+        </div>)}
+      </div>}
+    </div>
+  </div>);
+}
+
+// ── PATIENT PORTAL VIEW ──
+function PatientPortal({data,onBack}){
+  const[openMk,setOpen]=useState(new Set());
+  const toggle=m=>{const n=new Set(openMk);if(n.has(m))n.delete(m);else n.add(m);setOpen(n);};
+  const[portalTab,setPT]=useState("overview");
+
+  // Get latest treatment plan items from recommendation engine
+  const lr=runLR(data);
+
+  // Compute wins
+  const improvements=[];
+  for(const[m,v] of Object.entries(data.values)){
+    const vl=v.filter(x=>x!=null);if(vl.length<2)continue;const d=MD[m];if(!d)continue;
+    const first=vl[0],last=vl[vl.length-1];
+    if((st(first,m)!=="ok"&&st(last,m)==="ok")||(st(first,m)==="high"&&last<first&&d.hi<999)){
+      improvements.push({marker:m,first,last,unit:d.u,pct:((last-first)/Math.abs(first)*100).toFixed(0)});
+    }
+  }
+
+  // Flagged markers
+  const flagged=[];
+  for(const[m,v] of Object.entries(data.values)){
+    const vl=v.filter(x=>x!=null);if(!vl.length)continue;
+    const last=vl[vl.length-1];const s=st(last,m);
+    if(s==="high"||s==="low") flagged.push({marker:m,value:last,status:s,unit:MD[m]?.u});
+  }
+
+  // Next actions from demo treatment plan data
+  const actions=[
+    {action:"Therapeutic Phlebotomy",detail:"Scheduled to reduce hematocrit. Contact clinic to book.",due:"Within 2 weeks"},
+    {action:"Abdominal Ultrasound",detail:"Evaluate liver health. Your provider has ordered this.",due:"Within 4 weeks"},
+    {action:"Increase Water Intake",detail:"Minimum 100 oz daily. This directly impacts your hematocrit readings.",due:"Ongoing"},
+    {action:"Omega-3 Supplementation",detail:"EPA/DHA 2-4g daily with food. Supports HDL and cardiovascular health.",due:"Ongoing"},
+    {action:"Vitamin D3",detail:"5,000-10,000 IU daily with a meal containing fat.",due:"Recheck in 8-12 weeks"},
+    {action:"Follow-up Labs",detail:"Fasting blood draw. Your provider wants to recheck several markers.",due:"8 weeks from last draw"},
+  ];
+
+  // Upcoming reminders
+  const reminders=[
+    {type:"Lab Draw Due",message:"Your follow-up labs are due. Please schedule a fasting blood draw.",due:"May 2026",status:"upcoming"},
+    {type:"Vitamin D Recheck",message:"Time to recheck your Vitamin D level to see if supplementation is working.",due:"Jun 2026",status:"upcoming"},
+    {type:"Phlebotomy Follow-up",message:"Schedule your next phlebotomy appointment to manage hematocrit.",due:"May 2026",status:"upcoming"},
+  ];
+
+  const ptabs=[{k:"overview",l:"Overview"},{k:"trends",l:"My Trends"},{k:"plan",l:"My Plan"},{k:"reminders",l:"Reminders"},{k:"messages",l:"Messages"}];
+
+  const[msgText,setMsgText]=useState("");
+  const[msgs,setMsgs]=useState([
+    {id:1,from:"provider",name:"Koskinen APRN",time:"Apr 10, 2026 2:15 PM",text:"Hi John, your March labs are in. Hematocrit is still elevated at 56.1%. We need to get you scheduled for a phlebotomy. Also, your ALT is climbing so I've ordered an abdominal ultrasound. Please call the front desk to get both of those booked this week."},
+    {id:2,from:"patient",name:"John Doe",time:"Apr 10, 2026 3:42 PM",text:"Got it. I'll call tomorrow morning. Quick question, should I stop taking any of my supplements before the ultrasound?"},
+    {id:3,from:"provider",name:"Koskinen APRN",time:"Apr 10, 2026 4:10 PM",text:"No need to stop anything for the ultrasound. Just need you fasting for 8 hours before the appointment. Water is fine. We'll review the results together at your next visit."},
+    {id:4,from:"patient",name:"John Doe",time:"Apr 11, 2026 9:15 AM",text:"Booked both. Phlebotomy is Thursday and ultrasound is next Monday. Also, I've been doing 100+ oz of water daily like you suggested. Feeling noticeably better."},
+    {id:5,from:"provider",name:"Koskinen APRN",time:"Apr 11, 2026 10:30 AM",text:"That's great to hear. Hydration makes a real difference with your hematocrit. Keep it up. See you after the ultrasound results are in."},
+  ]);
+  const sendMsg=()=>{if(!msgText.trim())return;setMsgs([...msgs,{id:Date.now(),from:"patient",name:data.patient.name,time:new Date().toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}),text:msgText}]);setMsgText("");};
+
+  return(<div style={{fontFamily:"var(--font)",background:"var(--bg)",minHeight:"100vh",color:"var(--t3)"}}>
+    {/* Patient Header */}
+    <div style={{background:"linear-gradient(180deg,#0c1220,var(--card))",borderBottom:"1px solid var(--border)",padding:"18px 24px"}}>
+      <div className="hdr-wrap" style={{maxWidth:900,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,var(--green),var(--cyan))",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:18,color:"var(--bg)",fontFamily:"Manrope"}}>M</div>
+          <div><div style={{fontSize:17,fontWeight:800,color:"var(--t1)",fontFamily:"var(--head)"}}>MedLabIQ</div><div style={{fontSize:11,color:"var(--t7)"}}>Patient Portal</div></div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{background:"var(--card)",borderRadius:9,padding:"8px 14px",border:"1px solid var(--border)",fontSize:13}}>
+            <span style={{color:"var(--t6)"}}>Welcome, </span><span style={{color:"var(--t2)",fontWeight:600}}>{data.patient.name}</span>
+          </div>
+          <button onClick={onBack} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:8,padding:"8px 14px",color:"var(--t4)",cursor:"pointer",fontSize:12}}>Provider View</button>
+        </div>
+      </div>
+    </div>
+
+    <div className="page-pad" style={{maxWidth:900,margin:"0 auto",padding:24}}>
+      {/* Quick Stats */}
+      <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:26}}>
+        <div style={{background:"var(--card)",borderRadius:14,padding:"18px 22px",border:"1px solid var(--border)"}}>
+          <div style={{color:"var(--t6)",fontSize:10.5,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>Total Draws</div>
+          <div className="sn" style={{fontSize:34,fontWeight:800,color:"var(--cyan)",fontFamily:"var(--mono)",marginTop:5}}>{data.draws.length}</div>
+          <div style={{fontSize:12,color:"var(--t7)"}}>{data.draws[0]?.date} - {data.draws[data.draws.length-1]?.date}</div>
+        </div>
+        <div style={{background:"var(--card)",borderRadius:14,padding:"18px 22px",border:"1px solid var(--border)"}}>
+          <div style={{color:"var(--t6)",fontSize:10.5,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>Improving</div>
+          <div className="sn" style={{fontSize:34,fontWeight:800,color:"var(--green)",fontFamily:"var(--mono)",marginTop:5}}>{improvements.length}</div>
+          <div style={{fontSize:12,color:"var(--t7)"}}>markers trending better</div>
+        </div>
+        <div style={{background:"var(--card)",borderRadius:14,padding:"18px 22px",border:"1px solid var(--border)"}}>
+          <div style={{color:"var(--t6)",fontSize:10.5,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>Needs Attention</div>
+          <div className="sn" style={{fontSize:34,fontWeight:800,color:flagged.length>0?"var(--amber)":"var(--green)",fontFamily:"var(--mono)",marginTop:5}}>{flagged.length}</div>
+          <div style={{fontSize:12,color:"var(--t7)"}}>markers out of range</div>
+        </div>
+        <div style={{background:"var(--card)",borderRadius:14,padding:"18px 22px",border:"1px solid var(--border)"}}>
+          <div style={{color:"var(--t6)",fontSize:10.5,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>Next Labs Due</div>
+          <div className="sn" style={{fontSize:28,fontWeight:800,color:"var(--purple)",fontFamily:"var(--mono)",marginTop:5}}>May</div>
+          <div style={{fontSize:12,color:"var(--t7)"}}>2026</div>
+        </div>
+      </div>
+
+      {/* Portal Tabs */}
+      <div className="tab-nav" style={{display:"flex",gap:3,marginBottom:26,background:"var(--card)",borderRadius:12,padding:4,border:"1px solid var(--border)"}}>
+        {ptabs.map(t=><button key={t.k} onClick={()=>setPT(t.k)} style={{flex:"1 1 auto",padding:"11px 14px",border:"none",borderRadius:9,background:portalTab===t.k?"var(--border)":"transparent",color:portalTab===t.k?"var(--t2)":"var(--t6)",cursor:"pointer",fontSize:13,fontWeight:portalTab===t.k?600:400}}>{t.l}</button>)}
+      </div>
+
+      {/* OVERVIEW */}
+      {portalTab==="overview"&&<div>
+        {/* Wins */}
+        {improvements.length>0&&<div style={{background:"var(--card)",borderRadius:14,padding:24,border:"1px solid var(--green)20",marginBottom:20}}>
+          <h3 style={{color:"var(--green)",fontSize:16,fontWeight:700,margin:"0 0 16px",fontFamily:"var(--head)"}}>What's Improving</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {improvements.map((w,i)=><div key={i} style={{background:"var(--bg)",borderRadius:10,padding:"14px 16px",border:"1px solid var(--border)"}}>
+              <div style={{color:"var(--t2)",fontWeight:600,fontSize:14,marginBottom:4}}>{w.marker}</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                <span style={{color:"var(--t5)",fontSize:13,fontFamily:"var(--mono)"}}>{w.first}</span>
+                <span style={{color:"var(--green)"}}>&#8594;</span>
+                <span style={{color:"var(--green)",fontSize:18,fontWeight:700,fontFamily:"var(--mono)"}}>{w.last}</span>
+                <span style={{color:"var(--t6)",fontSize:11}}>{w.unit}</span>
+              </div>
+            </div>)}
+          </div>
+        </div>}
+
+        {/* Flags */}
+        {flagged.length>0&&<div style={{background:"var(--card)",borderRadius:14,padding:24,border:"1px solid var(--amber)20",marginBottom:20}}>
+          <h3 style={{color:"var(--amber)",fontSize:16,fontWeight:700,margin:"0 0 16px",fontFamily:"var(--head)"}}>Needs Attention</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {flagged.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,background:"var(--bg)",borderRadius:10,padding:"12px 16px",border:"1px solid var(--border)"}}>
+              <span style={{width:9,height:9,borderRadius:"50%",background:f.status==="high"?"var(--red)":"var(--amber)",flexShrink:0}}/>
+              <span style={{color:"var(--t2)",fontWeight:600,fontSize:14,flex:1}}>{f.marker}</span>
+              <span style={{color:f.status==="high"?"var(--red)":"var(--amber)",fontWeight:700,fontSize:16,fontFamily:"var(--mono)"}}>{f.value}</span>
+              <span style={{color:"var(--t6)",fontSize:11}}>{f.unit}</span>
+              <span style={{padding:"2px 8px",borderRadius:5,fontSize:9,fontWeight:700,textTransform:"uppercase",background:f.status==="high"?"var(--red)14":"var(--amber)14",color:f.status==="high"?"var(--red)":"var(--amber)"}}>{f.status}</span>
+            </div>)}
+          </div>
+          <div style={{marginTop:14,color:"var(--t5)",fontSize:12}}>Your provider has reviewed these results and included action items in your treatment plan.</div>
+        </div>}
+
+        {/* Next Steps */}
+        <div style={{background:"var(--card)",borderRadius:14,padding:24,border:"1px solid var(--border)"}}>
+          <h3 style={{color:"var(--t1)",fontSize:16,fontWeight:700,margin:"0 0 16px",fontFamily:"var(--head)"}}>Your Next Steps</h3>
+          {actions.slice(0,4).map((a,i)=><div key={i} style={{display:"flex",gap:14,padding:"12px 0",borderBottom:i<3?"1px solid var(--border)":"none"}}>
+            <div style={{width:28,height:28,borderRadius:8,background:"var(--green)14",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--green)",fontSize:14,fontWeight:700,flexShrink:0}}>{i+1}</div>
+            <div style={{flex:1}}>
+              <div style={{color:"var(--t2)",fontWeight:600,fontSize:14}}>{a.action}</div>
+              <div style={{color:"var(--t4)",fontSize:13,marginTop:2}}>{a.detail}</div>
+            </div>
+            <div style={{color:"var(--purple)",fontSize:11,fontWeight:600,whiteSpace:"nowrap",alignSelf:"center"}}>{a.due}</div>
+          </div>)}
+        </div>
+      </div>}
+
+      {/* TRENDS */}
+      {portalTab==="trends"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:20}}>Your lab markers tracked over time. Green = within range. Red = above range. Amber = below range.</div>
+        {Object.entries(data.values).map(([m,v])=>{
+          const vl=v.filter(x=>x!=null);if(vl.length<2)return null;const d=MD[m];if(!d)return null;
+          const last=vl[vl.length-1];const s=st(last,m);const col=s==="ok"?"var(--green)":s==="high"?"var(--red)":"var(--amber)";
+          return(<div key={m} style={{background:"var(--card)",borderRadius:14,border:"1px solid var(--border)",marginBottom:10,overflow:"hidden"}}>
+            <div onClick={()=>toggle(m)} style={{padding:"14px 18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{width:9,height:9,borderRadius:"50%",background:col}}/>
+                <span style={{color:"var(--t2)",fontWeight:600,fontSize:14}}>{m}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{color:col,fontWeight:700,fontSize:18,fontFamily:"var(--mono)"}}>{last}</span>
+                <span style={{color:"var(--t6)",fontSize:11}}>{d.u}</span>
+                <span style={{color:"var(--t6)"}}>{openMk.has(m)?"&#9652;":"&#9662;"}</span>
+              </div>
+            </div>
+            {openMk.has(m)&&<div style={{padding:"0 18px 18px"}}>
+              <SVGChart marker={m} values={v} draws={data.draws} def={d}/>
+            </div>}
+          </div>);
+        }).filter(Boolean)}
+      </div>}
+
+      {/* MY PLAN */}
+      {portalTab==="plan"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:20}}>Your current treatment plan from your provider. Follow these recommendations and contact the clinic with any questions.</div>
+        {actions.map((a,i)=><div key={i} style={{background:"var(--card)",borderRadius:14,padding:"18px 20px",border:"1px solid var(--border)",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{color:"var(--t1)",fontWeight:700,fontSize:15}}>{a.action}</span>
+            <span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"var(--purple)14",color:"var(--purple)"}}>{a.due}</span>
+          </div>
+          <div style={{color:"var(--t4)",fontSize:13,lineHeight:1.7}}>{a.detail}</div>
+        </div>)}
+        <div style={{marginTop:20,padding:"14px 18px",background:"var(--bg)",borderRadius:10,border:"1px solid var(--border)",color:"var(--t5)",fontSize:12}}>
+          This treatment plan was generated by your provider using MedLabIQ. Do not modify your medications or supplements without consulting your provider. If you have questions or concerns about any item, contact your clinic directly.
+        </div>
+      </div>}
+
+      {/* REMINDERS */}
+      {portalTab==="reminders"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:20}}>Upcoming follow-ups and lab reminders. Stay on track with your health optimization.</div>
+        {reminders.map((r,i)=><div key={i} style={{background:"var(--card)",borderRadius:14,padding:"18px 20px",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:16,alignItems:"flex-start"}}>
+          <div style={{width:48,height:48,borderRadius:12,background:"var(--purple)14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:20}}>&#128197;</span>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <span style={{color:"var(--t1)",fontWeight:700,fontSize:15}}>{r.type}</span>
+              <span style={{padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"var(--cyan)14",color:"var(--cyan)"}}>{r.due}</span>
+            </div>
+            <div style={{color:"var(--t4)",fontSize:13,lineHeight:1.6}}>{r.message}</div>
+          </div>
+        </div>)}
+        <div style={{marginTop:16,textAlign:"center"}}>
+          <button style={{background:"var(--green)",border:"none",borderRadius:10,padding:"14px 32px",color:"var(--bg)",fontWeight:700,fontSize:14,cursor:"pointer"}}>Schedule My Labs</button>
+        </div>
+      </div>}
+
+      {/* MESSAGES */}
+      {portalTab==="messages"&&<div>
+        <div style={{color:"var(--t5)",fontSize:13,marginBottom:20}}>Secure messaging with your care team. Messages are reviewed during business hours.</div>
+        
+        {/* Conversation */}
+        <div style={{background:"var(--card)",borderRadius:14,border:"1px solid var(--border)",overflow:"hidden"}}>
+          <div style={{padding:"14px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:8,background:"var(--green)18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"var(--green)"}}>K</div>
+            <div><div style={{color:"var(--t1)",fontWeight:600,fontSize:14}}>Koskinen APRN</div><div style={{color:"var(--t6)",fontSize:11}}>Your Provider</div></div>
+            <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}><span style={{width:8,height:8,borderRadius:"50%",background:"var(--green)"}}/>
+            <span style={{color:"var(--t5)",fontSize:11}}>Online</span></div>
+          </div>
+
+          {/* Message thread */}
+          <div style={{padding:"16px 20px",maxHeight:420,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+            {msgs.map(m=><div key={m.id} style={{display:"flex",flexDirection:"column",alignItems:m.from==="patient"?"flex-end":"flex-start",maxWidth:"85%",alignSelf:m.from==="patient"?"flex-end":"flex-start"}}>
+              <div style={{background:m.from==="patient"?"var(--green)14":"var(--bg)",borderRadius:m.from==="patient"?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"12px 16px",border:"1px solid "+(m.from==="patient"?"var(--green)25":"var(--border)")}}>
+                <div style={{color:"var(--t3)",fontSize:13,lineHeight:1.6}}>{m.text}</div>
+              </div>
+              <div style={{color:"var(--t7)",fontSize:10,marginTop:4,padding:"0 4px"}}>{m.name} | {m.time}</div>
+            </div>)}
+          </div>
+
+          {/* Compose */}
+          <div style={{padding:"14px 20px",borderTop:"1px solid var(--border)",display:"flex",gap:10}}>
+            <input value={msgText} onChange={e=>setMsgText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendMsg();}} placeholder="Type a message to your provider..." style={{flex:1,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 16px",color:"var(--t2)",fontSize:13,outline:"none"}}/>
+            <button onClick={sendMsg} style={{background:"var(--green)",border:"none",borderRadius:10,padding:"12px 20px",color:"var(--bg)",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>Send</button>
+          </div>
+        </div>
+
+        <div style={{marginTop:16,padding:"12px 16px",background:"var(--bg)",borderRadius:9,border:"1px solid var(--border)",color:"var(--t6)",fontSize:11,lineHeight:1.6}}>
+          Messages are not for emergencies. If you are experiencing a medical emergency, call 911 or go to your nearest emergency room. Your provider typically responds within 1 business day.
+        </div>
+      </div>}
+
+      {/* Footer */}
+      <div style={{marginTop:40,padding:"14px 18px",background:"var(--bg)",borderRadius:10,border:"1px solid var(--border)",color:"var(--t7)",fontSize:11,lineHeight:1.6,textAlign:"center"}}>
+        Powered by MedLabIQ. This portal provides a summary of your health data for informational purposes. It does not replace medical advice. Always consult your provider before making changes to your health regimen.
+      </div>
+    </div>
+  </div>);
+}
+
+// ── MAIN APP ──
+function App(){
+  const[data,setData]=useState(DEMO);
+  const[cat,setCat]=useState("all");
+  const[exp,setExp]=useState(new Set(["Hematocrit","ALT","Total Testosterone","LDL","Ferritin","HDL"]));
+  const[tab,setTab]=useState("dashboard");
+  const[view,setView]=useState("provider"); // "provider" | "patient" | "admin"
+  const has=data.draws.length>0;
+  const lr=useMemo(()=>has?runLR(data):[],[data,has]);
+  const qr=useMemo(()=>runQR(data.questionnaire,data.values),[data]);
+  const all=[...lr,...qr];const crit=all.filter(r=>r.sev==="critical").length;const warn=all.filter(r=>r.sev==="warning").length;
+  const toggle=m=>{const n=new Set(exp);if(n.has(m))n.delete(m);else n.add(m);setExp(n);};
+  const cats=useMemo(()=>{const o={};for(const[m,v]of Object.entries(data.values)){const d=MD[m];if(!d)continue;if(!o[d.c])o[d.c]=[];if(v.some(x=>x!=null))o[d.c].push(m);}return o;},[data]);
+  const fc=cat==="all"?cats:{[cat]:cats[cat]||[]};
+  const wins=useMemo(()=>{let c=0;for(const[m,v]of Object.entries(data.values)){const vl=v.filter(x=>x!=null);if(vl.length<2)continue;const d=MD[m];if(!d)continue;const prev=vl[vl.length-2],last=vl[vl.length-1];if(st(prev,m)!=="ok"&&st(last,m)==="ok")c++;else if(st(prev,m)==="high"&&last<prev&&d.hi<999)c++;}return c;},[data]);
+  const merge=(res)=>{const ed=[...data.draws];const ev={...data.values};for(const r of res){if(!r.data?.draws)continue;for(const draw of r.data.draws){const ei=ed.findIndex(d=>d.date===draw.date);if(ei>=0){for(const[mk,val]of Object.entries(draw.markers||{})){if(!ev[mk])ev[mk]=new Array(ed.length).fill(null);while(ev[mk].length<ed.length)ev[mk].push(null);ev[mk][ei]=val;}}else{ed.push({date:draw.date,lab:draw.lab,fasting:draw.fasting??true});for(const mk of Object.keys(ev))ev[mk].push(null);const ni=ed.length-1;for(const[mk,val]of Object.entries(draw.markers||{})){if(!ev[mk])ev[mk]=new Array(ed.length).fill(null);while(ev[mk].length<ed.length)ev[mk].push(null);ev[mk][ni]=val;}}}}setData({...data,draws:ed,values:ev});setTab("dashboard");};
+  const handleQS=answers=>{setData({...data,questionnaire:[...(data.questionnaire||[]),{date:data.draws[data.draws.length-1]?.date||"Current",answers}]});};
+  const tabs=[{k:"dashboard",l:"Dashboard"},{k:"recommendations",l:"Recs ("+all.length+")"},{k:"treatmentplan",l:"Treatment Plan"},{k:"questionnaire",l:"Questionnaire"},{k:"timeline",l:"History"},{k:"summary",l:"Summary"},{k:"upload",l:"Upload"}];
+
+  if(view==="admin") return <AdminPortal onSelectPatient={(pt)=>{setView("provider");}} onBack={()=>setView("provider")}/>;
+  if(view==="patient"&&has) return <PatientPortal data={data} onBack={()=>setView("provider")}/>;
+
+  return(<div style={{fontFamily:"var(--font)",background:"var(--bg)",minHeight:"100vh",color:"var(--t3)"}}>
+    <div style={{background:"linear-gradient(180deg,#0c1220,var(--card))",borderBottom:"1px solid var(--border)",padding:"18px 24px"}}>
+      <div className="hdr-wrap" style={{maxWidth:1280,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+        <a href="/" style={{display:"flex",alignItems:"center",gap:12,textDecoration:"none"}}><div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,var(--green),var(--cyan))",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:18,color:"var(--bg)",fontFamily:"Outfit"}}>M</div><div><h1 style={{margin:0,fontSize:19,fontWeight:800,color:"var(--t1)",fontFamily:"var(--head)"}}>MedLabIQ</h1><div style={{fontSize:11,color:"var(--t7)"}}>Clinical Lab Intelligence</div></div></a>
+        <div className="hdr-right" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          {has&&<div style={{background:"var(--amber)15",border:"1px solid var(--amber)30",borderRadius:8,padding:"6px 14px",fontSize:12,color:"var(--amber)",fontWeight:600}}>DEMO</div>}
+          {has&&<div style={{background:"var(--card)",borderRadius:9,padding:"8px 14px",border:"1px solid var(--border)",fontSize:13}}><span style={{color:"var(--t6)"}}>Patient: </span><span style={{color:"var(--t2)",fontWeight:600}}>{data.patient.name}</span>{" | "}{data.draws.length} draws</div>}
+          <button onClick={()=>setView("admin")} style={{background:"linear-gradient(135deg,var(--purple),#6d4ec4)",border:"none",borderRadius:9,padding:"8px 14px",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>Clinic Admin</button>
+          {has&&<button onClick={()=>setView("patient")} style={{background:"linear-gradient(135deg,var(--cyan),#1a9aab)",border:"none",borderRadius:9,padding:"8px 14px",color:"#000",cursor:"pointer",fontSize:12,fontWeight:700}}>Patient Portal</button>}
+        </div>
+      </div>
+    </div>
+    <div className="page-pad" style={{maxWidth:1280,margin:"0 auto",padding:24}}>
+      {has&&tab!=="upload"&&<div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:26}}>
+        {[{l:"Action Items",v:crit,c:crit>0?"var(--red)":"var(--green)",s:"critical"},{l:"Monitor",v:warn,c:warn>0?"var(--amber)":"var(--green)",s:"warnings"},{l:"Improving",v:wins,c:"var(--green)",s:"trending better"},{l:"Tracked",v:Object.values(data.values).filter(v=>v.some(x=>x!=null)).length,c:"var(--purple)",s:"markers"}].map((x,i)=><div key={i} style={{background:"var(--card)",borderRadius:14,padding:"18px 22px",border:"1px solid var(--border)"}}><div style={{color:"var(--t6)",fontSize:10.5,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.08em"}}>{x.l}</div><div className="sn" style={{fontSize:34,fontWeight:800,color:x.c,fontFamily:"var(--mono)",marginTop:5}}>{x.v}</div><div style={{fontSize:12,color:"var(--t7)"}}>{x.s}</div></div>)}
+      </div>}
+      {has&&<div className="tab-nav" style={{display:"flex",gap:3,marginBottom:26,background:"var(--card)",borderRadius:12,padding:4,border:"1px solid var(--border)",flexWrap:"wrap"}}>{tabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{flex:"1 1 auto",padding:"11px 14px",border:"none",borderRadius:9,background:tab===t.k?"var(--border)":"transparent",color:tab===t.k?"var(--t2)":"var(--t6)",cursor:"pointer",fontSize:12.5,fontWeight:tab===t.k?600:400,whiteSpace:"nowrap"}}>{t.l}</button>)}</div>}
+
+      {(tab==="upload"||!has)&&<div><PDFUp onDone={merge} existing={data.draws.map(d=>d.date)}/>{has&&<div style={{textAlign:"center",marginTop:18}}><button onClick={()=>setTab("dashboard")} style={{background:"var(--purple)",border:"none",borderRadius:10,padding:"13px 36px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Back to Dashboard</button></div>}</div>}
+
+      {has&&tab==="dashboard"&&<div>
+        <div className="cat-filter" style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:22}}><button onClick={()=>setCat("all")} style={{background:cat==="all"?"var(--border)":"var(--card)",border:"1px solid "+(cat==="all"?"var(--border2)":"var(--border)"),borderRadius:9,padding:"7px 16px",fontSize:12,color:cat==="all"?"var(--t2)":"var(--t6)",cursor:"pointer"}}>All</button>{Object.entries(CC).map(([k,cfg])=>{if(!cats[k])return null;return<button key={k} onClick={()=>setCat(k)} style={{background:cat===k?cfg.color+"12":"var(--card)",border:"1px solid "+(cat===k?cfg.color+"35":"var(--border)"),borderRadius:9,padding:"7px 16px",fontSize:12,color:cat===k?cfg.color:"var(--t6)",cursor:"pointer"}}>{cfg.label}</button>;})}</div>
+        {Object.entries(fc).map(([ct,markers])=>{if(!markers?.length)return null;const cfg=CC[ct];return<div key={ct} style={{marginBottom:30}}><div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14,paddingBottom:10,borderBottom:"1px solid "+(cfg?.color||"#253040")+"18"}}><span style={{color:cfg?.color,fontSize:16,fontWeight:700,fontFamily:"var(--head)"}}>{cfg?.label||ct}</span><span style={{color:"var(--t8)",fontSize:12}}>({markers.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:9}}>{markers.map(m=><MCard key={m} marker={m} values={data.values[m]} draws={data.draws} open={exp.has(m)} toggle={()=>toggle(m)}/>)}</div></div>;})}
+      </div>}
+
+      {has&&tab==="recommendations"&&<div>
+        <div style={{marginBottom:18,color:"var(--t5)",fontSize:13}}>Auto-generated from labs{qr.length>0?" and questionnaire":""}. {crit>0&&<span style={{color:"var(--red)",fontWeight:600}}>{crit} critical.</span>}</div>
+        {lr.map((r,i)=><div key={i} style={{background:"var(--card)",borderLeft:"4px solid "+SC[r.sev],borderRadius:"0 12px 12px 0",padding:"14px 18px",marginBottom:10}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{padding:"2px 10px",borderRadius:5,fontSize:9.5,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",background:SC[r.sev]+"14",color:SC[r.sev]}}>{r.sev==="critical"?"ACTION REQUIRED":r.sev==="warning"?"MONITOR":"NOTE"}</span><span style={{color:"var(--t2)",fontWeight:600}}>{r.marker}</span></div><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.7}}>{r.rec}</div></div>)}
+        {qr.length>0&&<div style={{marginTop:20}}><h4 style={{color:"var(--amber)",fontWeight:700,marginBottom:12}}>Questionnaire Cross-Ref</h4>{qr.map((r,i)=><div key={"q"+i} style={{background:"var(--card)",borderLeft:"4px solid "+SC[r.sev],borderRadius:"0 12px 12px 0",padding:"14px 18px",marginBottom:10}}><span style={{display:"inline-block",padding:"2px 10px",borderRadius:5,fontSize:9.5,fontWeight:700,background:SC[r.sev]+"14",color:SC[r.sev],marginBottom:8}}>MONITOR</span><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.7}}>{r.rec}</div></div>)}</div>}
+        {all.length===0&&<div style={{padding:32,textAlign:"center",color:"var(--t6)"}}><div style={{fontSize:36,color:"var(--green)",marginBottom:8}}>&#10003;</div>All clear.</div>}
+      </div>}
+
+      {has&&tab==="questionnaire"&&<div><div style={{marginBottom:18,color:"var(--t5)",fontSize:13}}>Patient symptoms cross-referenced with labs.</div><QS questionnaire={data.questionnaire} values={data.values} onSave={handleQS}/></div>}
+
+      {has&&tab==="treatmentplan"&&<TreatmentPlan data={data} labRecs={lr} qsRecs={qr}/>}
+      {has&&tab==="timeline"&&<div><div style={{marginBottom:18,color:"var(--t5)",fontSize:13}}>Chronological patient history.</div><TL timeline={data.timeline}/></div>}
+
+      {has&&tab==="summary"&&<div style={{background:"var(--card)",borderRadius:14,padding:30,border:"1px solid var(--border)"}}>
+        <h2 style={{margin:"0 0 5px",color:"var(--t1)",fontSize:21,fontWeight:800,fontFamily:"var(--head)"}}>Lab Review Summary</h2>
+        <div style={{color:"var(--t6)",fontSize:13,marginBottom:26}}>Patient: {data.patient.name} | {data.draws.length} draws ({data.draws[0]?.date} - {data.draws[data.draws.length-1]?.date})</div>
+        <div style={{marginBottom:28}}><h3 style={{color:"var(--green)",fontSize:15,fontWeight:700,margin:"0 0 14px"}}>&#10003; What's Working</h3><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.9}}>{Object.entries(data.values).map(([m,v])=>{const vl=v.filter(x=>x!=null);if(vl.length<2)return null;const d=MD[m];if(!d)return null;const first=vl[0],last=vl[vl.length-1];if((st(first,m)!=="ok"&&st(last,m)==="ok")||(st(first,m)==="high"&&last<first&&d.hi<999)){const pct=((last-first)/Math.abs(first)*100).toFixed(0);return<div key={m}>&#10003; <strong>{m}</strong>: {first} &#8594; {last} {d.u} ({pct>0?"+":""}{pct}%)</div>;}return null;}).filter(Boolean)}</div></div>
+        <div style={{marginBottom:28}}><h3 style={{color:"var(--red)",fontSize:15,fontWeight:700,margin:"0 0 14px"}}>&#9888; Action Items</h3>{all.length>0?<div style={{color:"var(--t4)",fontSize:13,lineHeight:1.9}}>{all.map((r,i)=><div key={i} style={{marginBottom:10,paddingLeft:18,borderLeft:"3px solid "+SC[r.sev]}}><strong style={{color:SC[r.sev]}}>{i+1}. {r.marker||"Questionnaire"}</strong>: {r.rec}</div>)}</div>:<div style={{color:"var(--green)"}}>All clear.</div>}</div>
+        <div style={{marginBottom:24}}><h3 style={{color:"var(--amber)",fontSize:15,fontWeight:700,margin:"0 0 14px"}}>Re-Add to Next Panel</h3><div style={{color:"var(--t4)",fontSize:13,lineHeight:1.9}}>{Object.entries(data.values).map(([m,v])=>{if(v.length<2)return null;if(v.slice(-2).every(x=>x==null)&&v.some(x=>x!=null)){const li=v.length-1-[...v].reverse().findIndex(x=>x!=null);return<div key={m}>&#8226; <strong>{m}</strong> (last: {data.draws[li]?.date})</div>;}return null;}).filter(Boolean)}</div></div>
+        {!data.draws[data.draws.length-1]?.fasting&&<div style={{padding:"12px 18px",background:"var(--amber)0e",borderRadius:10,border:"1px solid var(--amber)25",color:"var(--amber)",fontSize:13,marginBottom:20}}><strong>Note:</strong> Last draw was non-fasting. Next lipid panel should be fasting.</div>}
+        <div style={{padding:"14px 18px",background:"var(--bg)",borderRadius:10,color:"var(--t7)",fontSize:11,lineHeight:1.7}}>Auto-generated. Not medical advice. Powered by MedLabIQ.</div>
+      </div>}
+    </div>
+  </div>);
+}
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script></body></html>

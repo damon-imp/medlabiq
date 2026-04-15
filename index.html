@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedLabIQ - Clinical Lab Intelligence for Hormone Clinics</title>
+<meta name="description" content="MedLabIQ catches what your providers miss. Upload lab PDFs, auto-generate trend charts, clinical recommendations, and treatment plans in seconds.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#060a14;--bg2:#0b1122;--bg3:#101828;
+  --green:#3bba6a;--green2:#2a9d54;--cyan:#2eb8c9;
+  --red:#e05252;--amber:#d4973b;--purple:#9370e0;--pink:#d45fa0;
+  --t1:#f0f4f8;--t2:#d8dfe8;--t3:#a0aec0;--t4:#64748b;--t5:#3e4c62;
+  --border:#162035;
+  --head:'Manrope',sans-serif;--body:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--t2);font-family:var(--body);overflow-x:hidden}
+::selection{background:var(--green);color:var(--bg)}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:18px 40px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(6,10,20,0.7);border-bottom:1px solid rgba(22,32,53,0.5);transition:all 0.3s}
+.nav-logo{display:flex;align-items:center;gap:10px}
+.nav-logo-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--green),var(--cyan));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;color:var(--bg);font-family:var(--head)}
+.nav-logo-text{font-family:var(--head);font-weight:800;font-size:18px;color:var(--t1);letter-spacing:-0.03em}
+.nav-links{display:flex;gap:32px;align-items:center}
+.nav-links a{color:var(--t3);text-decoration:none;font-size:14px;font-weight:500;transition:color 0.2s}
+.nav-links a:hover{color:var(--t1)}
+.nav-links .nav-cta{background:var(--green);color:#000 !important;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;transition:all 0.2s;border:none;cursor:pointer}
+.nav-cta:hover{background:var(--green2);transform:translateY(-1px)}
+
+/* ── HERO ── */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 40px 80px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:900px;height:900px;background:radial-gradient(circle,rgba(59,186,106,0.08) 0%,rgba(46,184,201,0.04) 40%,transparent 70%);pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(to top,var(--bg),transparent);pointer-events:none}
+.hero-badge{display:inline-block;padding:6px 18px;border-radius:20px;background:rgba(59,186,106,0.08);border:1px solid rgba(59,186,106,0.2);color:var(--green);font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:28px;animation:fadeUp 0.8s ease both}
+.hero h1{font-family:var(--head);font-weight:900;font-size:clamp(42px,6vw,76px);line-height:1.05;letter-spacing:-0.04em;color:var(--t1);margin-bottom:24px;animation:fadeUp 0.8s ease 0.1s both}
+.hero h1 span{background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(16px,2vw,20px);color:var(--t3);max-width:640px;margin:0 auto 44px;line-height:1.7;font-weight:400;animation:fadeUp 0.8s ease 0.2s both}
+.hero-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;animation:fadeUp 0.8s ease 0.3s both}
+.btn-primary{background:linear-gradient(135deg,var(--green),var(--green2));color:var(--bg);padding:16px 36px;border-radius:10px;font-weight:700;font-size:16px;text-decoration:none;transition:all 0.25s;border:none;cursor:pointer;font-family:var(--body)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(59,186,106,0.25)}
+.btn-secondary{background:transparent;color:var(--t2);padding:16px 36px;border-radius:10px;font-weight:600;font-size:16px;text-decoration:none;transition:all 0.25s;border:1px solid var(--border);cursor:pointer;font-family:var(--body)}
+.btn-secondary:hover{border-color:var(--t4);background:rgba(255,255,255,0.03)}
+
+/* ── METRICS BAR ── */
+.metrics{padding:0 40px 80px;position:relative;z-index:2}
+.metrics-inner{max-width:960px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:16px;overflow:hidden}
+.metric{background:var(--bg2);padding:32px 24px;text-align:center}
+.metric-val{font-family:var(--head);font-weight:800;font-size:36px;letter-spacing:-0.03em;margin-bottom:4px}
+.metric-label{color:var(--t4);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em}
+
+/* ── PROBLEM SECTION ── */
+.problem{padding:100px 40px;max-width:1100px;margin:0 auto}
+.section-label{color:var(--red);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px}
+.problem h2{font-family:var(--head);font-weight:800;font-size:clamp(28px,4vw,42px);color:var(--t1);line-height:1.15;letter-spacing:-0.03em;margin-bottom:32px}
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}
+.problem-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:28px;position:relative;overflow:hidden}
+.problem-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--red);opacity:0.6}
+.problem-card h3{color:var(--t1);font-size:16px;font-weight:700;margin-bottom:8px;font-family:var(--head)}
+.problem-card p{color:var(--t3);font-size:14px;line-height:1.7}
+
+/* ── SOLUTION / FEATURES ── */
+.features{padding:100px 40px;max-width:1100px;margin:0 auto}
+.features .section-label{color:var(--green)}
+.features h2{font-family:var(--head);font-weight:800;font-size:clamp(28px,4vw,42px);color:var(--t1);line-height:1.15;letter-spacing:-0.03em;margin-bottom:20px}
+.features-sub{color:var(--t3);font-size:17px;line-height:1.7;max-width:600px;margin-bottom:56px}
+.feature-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.feature-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:32px 28px;transition:all 0.3s;position:relative}
+.feature-card:hover{border-color:var(--green);transform:translateY(-4px);box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.feature-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:20px}
+.feature-card h3{color:var(--t1);font-size:17px;font-weight:700;margin-bottom:10px;font-family:var(--head)}
+.feature-card p{color:var(--t3);font-size:14px;line-height:1.7}
+
+/* ── HOW IT WORKS ── */
+.how{padding:100px 40px;background:var(--bg2)}
+.how-inner{max-width:1100px;margin:0 auto}
+.how .section-label{color:var(--cyan)}
+.how h2{font-family:var(--head);font-weight:800;font-size:clamp(28px,4vw,42px);color:var(--t1);letter-spacing:-0.03em;margin-bottom:56px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
+.step{position:relative;padding-left:0}
+.step-num{font-family:var(--head);font-weight:900;font-size:64px;letter-spacing:-0.04em;line-height:1;margin-bottom:16px;background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;opacity:0.4}
+.step h3{color:var(--t1);font-size:18px;font-weight:700;margin-bottom:10px;font-family:var(--head)}
+.step p{color:var(--t3);font-size:14px;line-height:1.7}
+
+
+
+/* ── FOOTER ── */
+footer{padding:40px;border-top:1px solid var(--border);text-align:center}
+footer p{color:var(--t5);font-size:12px}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.reveal{opacity:0;transform:translateY(30px);transition:all 0.7s cubic-bezier(0.16,1,0.3,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+/* ── MOBILE ── */
+@media(max-width:1024px){
+  .feature-grid{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(max-width:768px){
+  .hero-actions{flex-direction:column;align-items:center}
+  .btn-primary,.btn-secondary{width:100%;text-align:center}
+  footer{padding:30px 20px}
+  .feature-card{padding:24px 20px}
+  .problem-card{padding:22px 18px}
+  .step{margin-bottom:10px}
+  .step-num{font-size:48px}
+  .how{padding:60px 24px}
+  .problem{padding:60px 24px}
+  .features{padding:60px 24px}
+  .metrics{padding:0 20px 60px}
+  .hero-sub{font-size:15px}
+  nav{padding:14px 20px}
+  .nav-links a:not(.nav-cta){display:none}
+  .hero{padding:100px 24px 60px}
+  .metrics-inner{grid-template-columns:repeat(2,1fr)}
+  .problem,.features,.how-inner{padding-left:24px;padding-right:24px}
+  .problem-grid,.feature-grid,.steps{grid-template-columns:1fr}
+  .metric{padding:24px 16px}
+  .metric-val{font-size:28px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo" style="text-decoration:none">
+    <div class="nav-logo-mark">M</div>
+    <div class="nav-logo-text">MedLabIQ</div>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How It Works</a>
+    
+    <a href="demo.html" class="nav-cta">Go To Demo</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div>
+    <div class="hero-badge">Clinical Lab Intelligence Platform</div>
+    <h1>Your providers are<br><span>missing flags.</span><br>This fixes that.</h1>
+    <p class="hero-sub">Upload a lab PDF. Get longitudinal trend charts, auto-generated clinical recommendations, treatment plans, patient portals, and automated reminders. Everything your providers need. Nothing they have to remember.</p>
+    <div class="hero-actions">
+      <a href="demo.html" class="btn-primary">Go To Demo</a>
+      <a href="#features" class="btn-secondary">See How It Works</a>
+    </div>
+  </div>
+</section>
+
+<!-- METRICS -->
+<section class="metrics">
+  <div class="metrics-inner">
+    <div class="metric"><div class="metric-val" style="color:var(--red)">67%</div><div class="metric-label">of flags missed by providers</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--amber)">3 mo</div><div class="metric-label">until next review catches it</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--green)">< 30s</div><div class="metric-label">MedLabIQ flag detection</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--cyan)">100%</div><div class="metric-label">of markers tracked over time</div></div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem reveal">
+  <div class="section-label">The Problem</div>
+  <h2>Your providers are eyeballing PDFs.<br>Your patients are paying for it.</h2>
+  <div class="problem-grid">
+    <div class="problem-card">
+      <h3>Missed Recommendations</h3>
+      <p>Hydration, sleep, key nutrients, peptides that should have been recommended. Every missed flag is revenue lost and a patient who doesn't feel better for another 3 months.</p>
+    </div>
+    <div class="problem-card">
+      <h3>No Longitudinal View</h3>
+      <p>Providers see one draw at a time. They can't see that ALT has been climbing for 4 draws straight or that hematocrit has been elevated for 17 months. Trends tell the story. Single snapshots don't.</p>
+    </div>
+    <div class="problem-card">
+      <h3>Time-Crushed Calls</h3>
+      <p>Calls are tightening up. Providers don't have time to cross-reference 30 markers against symptoms, history, and protocol. Things slip through the cracks.</p>
+    </div>
+    <div class="problem-card">
+      <h3>Patient Churn</h3>
+      <p>Patients who don't feel better leave. They cancel or go somewhere else looking for solutions. Every missed flag accelerates that timeline.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features reveal" id="features">
+  <div class="section-label">The Platform</div>
+  <h2>One system. Three portals.<br>Nothing missed.</h2>
+  <p class="features-sub">MedLabIQ replaces 4-5 disconnected tools with a single clinical operating system for your entire clinic.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(59,186,106,0.1)">&#128196;</div>
+      <h3>PDF Lab Extraction</h3>
+      <p>Drop a Labcorp or Quest PDF. AI reads the entire document and extracts every marker, draw date, and reference range in seconds. No manual entry. No ChatGPT.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(46,184,201,0.1)">&#128200;</div>
+      <h3>Longitudinal Charting</h3>
+      <p>Every marker trended across every draw with reference lines. Upload 6 PDFs from 6 draws. The system builds the full picture automatically.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(224,82,82,0.1)">&#9888;&#65039;</div>
+      <h3>Auto Recommendations</h3>
+      <p>Clinical rules fire automatically on every upload. Hematocrit elevated 2+ draws? Flagged critical. ALT trending up? Ultrasound recommended. The system catches it so the provider doesn't have to remember.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(147,112,224,0.1)">&#128203;</div>
+      <h3>Symptom Cross-Reference</h3>
+      <p>Patient questionnaire maps sleep, energy, libido, brain fog directly to lab values. Low energy + low Vitamin D + low Free T = connected dots and a specific recommendation.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(212,95,160,0.1)">&#128137;</div>
+      <h3>Treatment Plan Builder</h3>
+      <p>Auto-generated from every flag. Dosing, frequency, follow-up timing pre-filled. Provider edits inline, adds custom items, exports to signed PDF. Chart-ready in one click.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(212,151,59,0.1)">&#128138;</div>
+      <h3>Drug & Supplement Interactions</h3>
+      <p>Treatment plan items are checked against an interaction database in real time. Contraindicated pairs flagged red. Moderate interactions flagged amber. Provider acknowledges or adjusts.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(46,184,201,0.1)">&#128100;</div>
+      <h3>Patient Portal</h3>
+      <p>Patients see their own trends, treatment plan, and progress. No clinical jargon. Simplified view with action items. Reduces inbound calls. Increases retention.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(59,186,106,0.1)">&#128172;</div>
+      <h3>Secure Messaging</h3>
+      <p>Patients message their provider directly through the portal. No more screenshots in DMs. Threaded conversations, read receipts, and response time tracking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(224,82,82,0.1)">&#128276;</div>
+      <h3>Automated Reminders</h3>
+      <p>Treatment plan says "recheck in 8 weeks" and the system nags the patient until labs are done. Email, SMS, escalation logic. No more patients falling off for 6 months.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(147,112,224,0.1)">&#127970;</div>
+      <h3>Clinic Admin Dashboard</h3>
+      <p>Full patient roster. Filter by provider, flag status, overdue labs. See which patients need attention across your entire clinic in one view. Provider workload balancing.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(212,151,59,0.1)">&#128274;</div>
+      <h3>Audit Trail</h3>
+      <p>Every action logged. Every recommendation generated, every plan signed, every edit tracked. Immutable compliance record. If a flag was surfaced and ignored, the system has proof.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(212,95,160,0.1)">&#9916;</div>
+      <h3>Wearable Integration</h3>
+      <p>Oura, Apple Health, Whoop. Sleep scores, HRV, and resting heart rate displayed alongside lab trends. Provider sees that sleep dropped the same month testosterone was adjusted.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how reveal" id="how">
+  <div class="how-inner">
+    <div class="section-label">How It Works</div>
+    <h2>Three portals. One platform.</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Provider Dashboard</h3>
+        <p>Upload lab PDFs. AI extracts every marker. System charts trends, fires clinical recommendations, cross-references symptoms, and auto-generates a treatment plan with dosing, follow-up timing, and interaction checks. Provider reviews, edits, signs, exports.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>Patient Portal</h3>
+        <p>Patients see their own trends, treatment plan, and progress in plain language. Message their provider directly. Acknowledge reminders. No chart-digging, no screenshots, no confusion. They stay engaged because they can see the results.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Clinic Administration</h3>
+        <p>Full patient roster with flag status, overdue labs, unsigned plans, and provider workloads across the entire clinic. Audit trail for compliance. Automated reminders that escalate until patients complete their labs. Nothing falls through the cracks.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>&copy; 2026 MedLabIQ. Clinical lab intelligence for hormone optimization clinics.</p>
+</footer>
+
+<!-- SCROLL REVEAL -->
+<script>
+const reveals=document.querySelectorAll('.reveal');
+const observer=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target);}});
+},{threshold:0.15});
+reveals.forEach(el=>observer.observe(el));
+</script>
+</body>
+</html>
